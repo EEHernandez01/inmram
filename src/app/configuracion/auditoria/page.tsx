@@ -1,0 +1,8 @@
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { listarAuditoria } from "@/lib/services/audit";
+
+export default async function AuditPage() {
+  const records = await listarAuditoria();
+  return <><PageHeader eyebrow="Configuración" title="Auditoría" description="Últimos 100 cambios operativos. La bitácora excluye RFC, nombres de avales y datos de contacto." /><section className="mt-7">{records.length === 0 ? <EmptyState title="Sin actividad" description="Los cambios relevantes aparecerán aquí." /> : <div className="overflow-x-auto rounded-card border border-border bg-surface"><table className="w-full min-w-[850px] text-left text-sm"><thead className="border-b border-border text-xs font-semibold uppercase tracking-wide text-ink-secondary"><tr><th className="px-5 py-3">Fecha</th><th className="px-5 py-3">Usuario</th><th className="px-5 py-3">Acción</th><th className="px-5 py-3">Entidad</th><th className="px-5 py-3">Identificador</th></tr></thead><tbody className="divide-y divide-border">{records.map((record) => <tr className="hover:bg-bg/50" key={record.id}><td className="px-5 py-4 text-ink-secondary">{new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Mexico_City" }).format(record.creadoEn)}</td><td className="px-5 py-4 text-ink">{record.usuarioSistema?.perfil?.alias || record.usuarioSistema?.perfil?.nombreCompleto || "Sistema"}</td><td className="px-5 py-4 font-semibold text-ink">{record.accion.replaceAll("_", " ")}</td><td className="px-5 py-4 text-ink-secondary">{record.entidad}</td><td className="px-5 py-4 font-mono text-xs text-ink-secondary">{record.entidadId.slice(0, 12)}</td></tr>)}</tbody></table></div>}</section></>;
+}

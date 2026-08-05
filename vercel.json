@@ -1,0 +1,9 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/cobranza",
+      "schedule": "10 6 * * *"
+    }
+  ]
+}
+

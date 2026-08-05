@@ -1,0 +1,242 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RolUsuario {
+  DUENO
+  ADMINISTRADOR
+  SOLO_LECTURA
+}
+
+enum TipoUnidad {
+  DEPARTAMENTO
+  LOCAL_COMERCIAL
+  ACCESORIA
+  BODEGA
+  OFICINA
+  OTRO
+}
+
+enum EstadoContrato {
+  ACTIVO
+  VENCIDO
+}
+
+enum EstadoRecibo {
+  PENDIENTE
+  PAGADO
+  VENCIDO
+}
+
+enum FormaPago {
+  EFECTIVO
+  TRANSFERENCIA
+}
+
+model UsuarioSistema {
+  id             String              @id @default(uuid()) @db.Uuid
+  neonAuthUserId String              @unique
+  rol            RolUsuario          @default(SOLO_LECTURA)
+  activo         Boolean             @default(true)
+  perfil         PerfilUsuario?
+  propietario    Propietario?
+  auditorias     RegistroAuditoria[]
+  creadoEn       DateTime            @default(now())
+  actualizadoEn  DateTime            @updatedAt
+}
+
+model PerfilUsuario {
+  id               String         @id @default(uuid()) @db.Uuid
+  usuarioSistemaId String         @unique @db.Uuid
+  nombreCompleto   String
+  alias            String?
+  razonSocial      String?
+  telefono         String?
+  rfcCifrado       String?
+  usuarioSistema   UsuarioSistema @relation(fields: [usuarioSistemaId], references: [id], onDelete: Cascade)
+  creadoEn         DateTime       @default(now())
+  actualizadoEn    DateTime       @updatedAt
+}
+
+model Marca {
+  id              String      @id @default(uuid()) @db.Uuid
+  nombreComercial String
+  logoUrl         String?
+  propiedades     Propiedad[]
+  creadoEn        DateTime    @default(now())
+  actualizadoEn   DateTime    @updatedAt
+}
+
+model Propietario {
+  id               String          @id @default(uuid()) @db.Uuid
+  usuarioSistemaId String?         @unique @db.Uuid
+  nombre           String
+  usuarioSistema   UsuarioSistema? @relation(fields: [usuarioSistemaId], references: [id], onDelete: Restrict)
+  propiedades      Propiedad[]
+  creadoEn         DateTime        @default(now())
+  actualizadoEn    DateTime        @updatedAt
+}
+
+model Propiedad {
+  id                  String      @id @default(uuid()) @db.Uuid
+  propietarioId       String      @db.Uuid
+  marcaId             String?     @db.Uuid
+  direccion           String
+  googlePlaceId       String?
+  latitud             Decimal?    @db.Decimal(9, 6)
+  longitud            Decimal?    @db.Decimal(9, 6)
+  valorCatastral      Decimal     @db.Decimal(14, 2)
+  valorComercialTotal Decimal     @db.Decimal(14, 2)
+  predialAnual        Decimal     @db.Decimal(14, 2)
+  mantenimientoAnual  Decimal     @db.Decimal(14, 2)
+  propietario         Propietario @relation(fields: [propietarioId], references: [id], onDelete: Restrict)
+  marca               Marca?      @relation(fields: [marcaId], references: [id], onDelete: SetNull)
+  unidades            Unidad[]
+  creadoEn            DateTime    @default(now())
+  actualizadoEn       DateTime    @updatedAt
+
+  @@index([propietarioId])
+  @@index([marcaId])
+  @@index([googlePlaceId])
+}
+
+model Unidad {
+  id              String       @id @default(uuid()) @db.Uuid
+  propiedadId     String       @db.Uuid
+  identificador   String
+  tipo            TipoUnidad
+  metrosCuadrados Decimal      @db.Decimal(10, 2)
+  descripcion     String?
+  piso            String?
+  atributos       Json?
+  propiedad       Propiedad    @relation(fields: [propiedadId], references: [id], onDelete: Restrict)
+  medidorAgua     MedidorAgua?
+  contratos       Contrato[]
+  creadoEn        DateTime     @default(now())
+  actualizadoEn   DateTime     @updatedAt
+
+  @@unique([propiedadId, identificador])
+  @@index([propiedadId])
+  @@index([tipo])
+}
+
+model MedidorAgua {
+  id                   String        @id @default(uuid()) @db.Uuid
+  unidadId             String        @unique @db.Uuid
+  cuotaFija            Decimal       @db.Decimal(14, 2)
+  tarifaPorMetroCubico Decimal       @db.Decimal(14, 4)
+  unidad               Unidad        @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+  lecturas             LecturaAgua[]
+  creadoEn             DateTime      @default(now())
+  actualizadoEn        DateTime      @updatedAt
+}
+
+model LecturaAgua {
+  id                      String      @id @default(uuid()) @db.Uuid
+  medidorAguaId           String      @db.Uuid
+  periodo                 DateTime    @db.Date
+  lecturaAnterior         Decimal     @db.Decimal(12, 3)
+  lecturaActual           Decimal     @db.Decimal(12, 3)
+  metrosCubicosConsumidos Decimal     @db.Decimal(12, 3)
+  medidorAgua             MedidorAgua @relation(fields: [medidorAguaId], references: [id], onDelete: Restrict)
+  creadoEn                DateTime    @default(now())
+  actualizadoEn           DateTime    @updatedAt
+
+  @@unique([medidorAguaId, periodo])
+  @@index([periodo])
+}
+
+model Contrato {
+  id                   String            @id @default(uuid()) @db.Uuid
+  unidadId             String            @db.Uuid
+  arrendatario         String
+  emailArrendatario    String?
+  telefonoArrendatario String?
+  aval                 String
+  fechaInicio          DateTime          @db.Date
+  plazoMeses           Int
+  fechaFin             DateTime          @db.Date
+  rentaMensualBase     Decimal           @db.Decimal(14, 2)
+  diaPago              Int
+  depositoGarantia     Decimal           @db.Decimal(14, 2)
+  estado               EstadoContrato    @default(ACTIVO)
+  unidad               Unidad            @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+  recibos              Recibo[]
+  ajustesInflacion     AjusteInflacion[]
+  creadoEn             DateTime          @default(now())
+  actualizadoEn        DateTime          @updatedAt
+
+  @@index([unidadId])
+  @@index([estado])
+  @@index([fechaFin])
+}
+
+model RegistroAuditoria {
+  id               String          @id @default(uuid()) @db.Uuid
+  usuarioSistemaId String?         @db.Uuid
+  accion           String
+  entidad          String
+  entidadId        String
+  antes            Json?
+  despues          Json?
+  usuarioSistema   UsuarioSistema? @relation(fields: [usuarioSistemaId], references: [id], onDelete: SetNull)
+  creadoEn         DateTime        @default(now())
+
+  @@index([entidad, entidadId])
+  @@index([usuarioSistemaId])
+  @@index([creadoEn])
+}
+
+model Recibo {
+  id               String       @id @default(uuid()) @db.Uuid
+  contratoId       String       @db.Uuid
+  periodo          DateTime     @db.Date
+  fechaVencimiento DateTime     @db.Date
+  monto            Decimal      @db.Decimal(14, 2)
+  estatus          EstadoRecibo @default(PENDIENTE)
+  fechaPago        DateTime?    @db.Date
+  formaPago        FormaPago?
+  cargoAgua        Decimal?     @db.Decimal(14, 2)
+  contrato         Contrato     @relation(fields: [contratoId], references: [id], onDelete: Restrict)
+  creadoEn         DateTime     @default(now())
+  actualizadoEn    DateTime     @updatedAt
+
+  @@unique([contratoId, periodo])
+  @@index([contratoId])
+  @@index([periodo])
+  @@index([fechaVencimiento])
+  @@index([estatus])
+}
+
+model AjusteInflacion {
+  id                 String   @id @default(uuid()) @db.Uuid
+  contratoId         String   @db.Uuid
+  fechaAplicacion    DateTime @db.Date
+  indiceUsado        String
+  porcentajeAplicado Decimal  @db.Decimal(9, 6)
+  rentaResultante    Decimal  @db.Decimal(14, 2)
+  contrato           Contrato @relation(fields: [contratoId], references: [id], onDelete: Restrict)
+  creadoEn           DateTime @default(now())
+  actualizadoEn      DateTime @updatedAt
+
+  @@unique([contratoId, fechaAplicacion])
+  @@index([contratoId])
+}
+
+model IndiceInflacion {
+  id            String   @id @default(uuid()) @db.Uuid
+  indice        String
+  mes           DateTime @db.Date
+  valor         Decimal  @db.Decimal(18, 8)
+  fechaCorte    DateTime @db.Date
+  creadoEn      DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@unique([indice, mes])
+  @@index([mes])
+}
