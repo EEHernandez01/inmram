@@ -1,6 +1,5 @@
-import type { FoundationActionState } from "@/app/_actions/foundation";
-import { FoundationForm } from "@/components/forms/foundation-form";
 import { Field, Input, Select, Textarea } from "@/components/ui/form-controls";
+import { FormStatus } from "@/components/ui/form-status";
 
 const unitTypes = [
   ["DEPARTAMENTO", "Departamento"],
@@ -19,14 +18,18 @@ type UnitDefaults = {
   piso?: string | null;
 };
 
-export function UnitForm({ action, defaults, propertyId, submitLabel }: {
-  action: (state: FoundationActionState | undefined, formData: FormData) => Promise<FoundationActionState | undefined>;
+export function UnitForm({ defaults, propertyId, submitLabel, unitId }: {
   defaults?: UnitDefaults;
   propertyId: string;
   submitLabel: string;
+  unitId?: string;
 }) {
+  const action = unitId
+    ? `/api/propiedades/${propertyId}/unidades/${unitId}`
+    : `/api/propiedades/${propertyId}/unidades`;
+
   return (
-    <FoundationForm action={action} submitLabel={submitLabel}>
+    <form action={action} className="space-y-5" method="post">
       <input name="propiedadId" type="hidden" value={propertyId} />
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="Identificador">
@@ -48,6 +51,10 @@ export function UnitForm({ action, defaults, propertyId, submitLabel }: {
       <Field label="Descripción" hint="Opcional">
         <Textarea defaultValue={defaults?.descripcion ?? ""} maxLength={2000} name="descripcion" rows={4} />
       </Field>
-    </FoundationForm>
+      <FormStatus message={undefined} />
+      <button className="rounded bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover" type="submit">
+        {submitLabel}
+      </button>
+    </form>
   );
 }

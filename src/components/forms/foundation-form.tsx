@@ -1,36 +1,25 @@
-"use client";
-
-import { useActionState } from "react";
-
-import type { FoundationActionState } from "@/app/_actions/foundation";
 import { FormStatus } from "@/components/ui/form-status";
 
-const initialState: FoundationActionState = {};
+export type FoundationFormAction = (formData: FormData) => Promise<void>;
 
 export function FoundationForm({
   action,
   children,
   submitLabel,
 }: {
-  action: (
-    state: FoundationActionState | undefined,
-    formData: FormData,
-  ) => Promise<FoundationActionState | undefined>;
+  action: FoundationFormAction;
   children: React.ReactNode;
   submitLabel: string;
 }) {
-  const [state, formAction, pending] = useActionState(action, initialState);
-
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={action} className="space-y-5">
       {children}
-      <FormStatus message={state?.error} />
+      <FormStatus message={undefined} />
       <button
-        className="rounded bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={pending}
+        className="rounded bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover"
         type="submit"
       >
-        {pending ? "Guardando…" : submitLabel}
+        {submitLabel}
       </button>
     </form>
   );

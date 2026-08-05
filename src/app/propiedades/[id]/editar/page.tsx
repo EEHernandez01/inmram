@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { updatePropertyAction } from "@/app/_actions/foundation";
+import { updatePropertyFormAction } from "@/app/_actions/foundation";
 import { PropertyForm } from "@/components/forms/property-form";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
@@ -22,7 +22,7 @@ export default async function EditPropertyPage({ params }: { params: Promise<{ i
     <>
       <PageHeader eyebrow="Propiedades" title="Editar propiedad" />
       <section className="mt-7 rounded-card border border-border bg-surface p-5">
-        <PropertyForm action={updatePropertyAction.bind(null, id)} defaults={{ direccion: property.direccion, googlePlaceId: property.googlePlaceId ?? undefined, latitud: property.latitud?.toString(), longitud: property.longitud?.toString(), valorCatastral: property.valorCatastral.toString(), valorComercialTotal: property.valorComercialTotal.toString(), predialAnual: property.predialAnual.toString(), mantenimientoAnual: property.mantenimientoAnual.toString() }} placesEnabled={Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY)} submitLabel="Guardar cambios" />
+        <PropertyForm action={updatePropertyFormAction.bind(null, id)} defaults={{ direccion: property.direccion, googlePlaceId: property.googlePlaceId ?? undefined, latitud: property.latitud?.toString(), longitud: property.longitud?.toString(), valorCatastral: property.valorCatastral.toString(), valorComercialTotal: property.valorComercialTotal.toString(), predialAnual: property.predialAnual.toString(), mantenimientoAnual: property.mantenimientoAnual.toString() }} placesEnabled={Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY)} submitLabel="Guardar cambios" />
         <Link className="mt-5 inline-block text-sm font-semibold text-brand hover:text-brand-hover" href={`/propiedades/${id}`}>Cancelar</Link>
       </section>
     </>

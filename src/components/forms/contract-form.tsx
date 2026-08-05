@@ -1,5 +1,4 @@
-import type { FoundationActionState } from "@/app/_actions/foundation";
-import { FoundationForm } from "@/components/forms/foundation-form";
+import { FormStatus } from "@/components/ui/form-status";
 import { Field, Input } from "@/components/ui/form-controls";
 
 type ContractDefaults = {
@@ -16,15 +15,19 @@ type ContractDefaults = {
   estado: "ACTIVO" | "VENCIDO";
 };
 
-export function ContractForm({ action, defaults, propertyId, submitLabel, unitId }: {
-  action: (state: FoundationActionState | undefined, formData: FormData) => Promise<FoundationActionState | undefined>;
+export function ContractForm({ defaults, propertyId, submitLabel, unitId, contractId }: {
   defaults?: ContractDefaults;
   propertyId: string;
   submitLabel: string;
   unitId: string;
+  contractId?: string;
 }) {
+  const action = contractId
+    ? `/api/contratos/${contractId}`
+    : `/api/propiedades/${propertyId}/unidades/${unitId}/contratos`;
+
   return (
-    <FoundationForm action={action} submitLabel={submitLabel}>
+    <form action={action} className="space-y-5" method="post">
       <input name="propiedadId" type="hidden" value={propertyId} />
       <input name="unidadId" type="hidden" value={unitId} />
       <input name="estado" type="hidden" value={defaults?.estado ?? "ACTIVO"} />
@@ -56,6 +59,10 @@ export function ContractForm({ action, defaults, propertyId, submitLabel, unitId
           <Input defaultValue={defaults?.depositoGarantia} inputMode="decimal" name="depositoGarantia" placeholder="0.00" required />
         </Field>
       </div>
-    </FoundationForm>
+      <FormStatus message={undefined} />
+      <button className="rounded bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover" type="submit">
+        {submitLabel}
+      </button>
+    </form>
   );
 }
