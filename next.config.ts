@@ -5,11 +5,11 @@ const nextConfig: NextConfig = {
   async headers() {
     const contentSecurityPolicy = [
       "default-src 'self'",
-      `script-src 'self' 'unsafe-inline' https://maps.googleapis.com${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
+      `script-src 'self' 'unsafe-inline' https://maps.googleapis.com https://va.vercel-scripts.com${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https://maps.googleapis.com https://maps.gstatic.com",
       "font-src 'self' data:",
-      "connect-src 'self' https://*.neon.tech https://api.resend.com https://maps.googleapis.com https://maps.gstatic.com https://places.googleapis.com",
+      "connect-src 'self' https://*.neon.tech https://api.resend.com https://maps.googleapis.com https://maps.gstatic.com https://places.googleapis.com https://vitals.vercel-insights.com",
       "frame-src 'self' https://www.google.com https://maps.google.com",
       "object-src 'none'",
       "base-uri 'self'",
