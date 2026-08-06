@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --test tests/*.test.ts"
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "db:check": "node --env-file=.env --experimental-strip-types scripts/validar-conexion-db.mts"
   },
   "dependencies": {
     "@neondatabase/auth": "0.4.2-beta",
