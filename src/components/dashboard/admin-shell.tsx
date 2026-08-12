@@ -11,8 +11,8 @@ export async function AdminShell({ children }: { children: React.ReactNode }) {
         email={session.user.email}
         name={user.perfil?.nombreCompleto || session.user.name || session.user.email}
       />
-      <div className="lg:pl-60">
-        <main className="mx-auto max-w-[1200px] px-5 py-7 sm:px-9">{children}</main>
+      <div className="lg:pl-[272px]">
+        <main className="mx-auto max-w-[1280px] px-5 py-7 sm:px-9 sm:py-10">{children}</main>
       </div>
     </div>
   );

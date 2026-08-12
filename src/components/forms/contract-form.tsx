@@ -6,12 +6,15 @@ type ContractDefaults = {
   emailArrendatario?: string | null;
   telefonoArrendatario?: string | null;
   aval: string;
+  avalTelefono?: string | null;
+  avalCorreo?: string | null;
   fechaInicio: string;
   plazoMeses: number;
   fechaFin: string;
   rentaMensualBase: string;
   diaPago: number;
   depositoGarantia: string;
+  cargoFijoMensual?: string;
   estado: "ACTIVO" | "VENCIDO";
 };
 
@@ -40,6 +43,8 @@ export function ContractForm({ defaults, propertyId, submitLabel, unitId, contra
         <Field label="Aval">
           <Input autoComplete="off" defaultValue={defaults?.aval} maxLength={250} name="aval" required />
         </Field>
+        <Field label="Teléfono del aval"><Input autoComplete="tel" defaultValue={defaults?.avalTelefono ?? ""} maxLength={20} name="avalTelefono" type="tel" /></Field>
+        <Field label="Correo del aval"><Input autoComplete="email" defaultValue={defaults?.avalCorreo ?? ""} maxLength={254} name="avalCorreo" type="email" /></Field>
         <Field label="Fecha de inicio">
           <Input defaultValue={defaults?.fechaInicio} name="fechaInicio" required type="date" />
         </Field>
@@ -58,6 +63,7 @@ export function ContractForm({ defaults, propertyId, submitLabel, unitId, contra
         <Field label="Depósito en garantía">
           <Input defaultValue={defaults?.depositoGarantia} inputMode="decimal" name="depositoGarantia" placeholder="0.00" required />
         </Field>
+        <Field label="Cargo fijo mensual"><Input defaultValue={defaults?.cargoFijoMensual ?? "0.00"} inputMode="decimal" name="cargoFijoMensual" placeholder="0.00" required /></Field>
       </div>
       <FormStatus message={undefined} />
       <button className="rounded bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover" type="submit">

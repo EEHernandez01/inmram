@@ -1,0 +1,3 @@
+export function PropertyCover({ address }: { address: string }) {
+  return <div className="flex h-full w-full flex-col justify-end bg-[linear-gradient(145deg,#1e3a5f,#426583)] p-5 text-white"><svg aria-hidden="true" className="mb-auto h-9 w-9 opacity-80" fill="none" stroke="currentColor" strokeWidth="1.7" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.4"/></svg><p className="text-xs font-semibold uppercase tracking-[.14em] text-white/70">Inmueble registrado</p><p className="mt-1 line-clamp-2 font-serif text-lg font-semibold leading-snug">{address}</p></div>;
+}

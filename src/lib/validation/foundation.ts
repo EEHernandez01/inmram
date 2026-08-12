@@ -51,6 +51,10 @@ export const perfilUsuarioInputSchema = z.object({
     .optional(),
 });
 
+export const usuarioAdministradorInputSchema = z.object({
+  neonAuthUserId: z.string().trim().min(1).max(255),
+});
+
 export const propiedadInputSchema = z
   .object({
     propietarioId: uuid,
@@ -90,6 +94,10 @@ export const unidadInputSchema = z.object({
   descripcion: z.string().trim().max(2_000).nullable().optional(),
   piso: z.string().trim().max(50).nullable().optional(),
   atributos: z.record(z.string(), z.json()).nullable().optional(),
+  recamaras: z.coerce.number().int().min(0).max(50).default(0),
+  banosCompletos: z.coerce.number().int().min(0).max(50).default(0),
+  mediosBanos: z.coerce.number().int().min(0).max(50).default(0),
+  amenidades: z.array(z.string().trim().min(1).max(100)).max(30).nullable().optional(),
 });
 
 export const contratoInputSchema = z
@@ -105,6 +113,9 @@ export const contratoInputSchema = z
     rentaMensualBase: money,
     diaPago: z.coerce.number().int().min(1).max(31),
     depositoGarantia: money,
+    cargoFijoMensual: money.optional().default("0.00"),
+    avalTelefono: z.string().trim().regex(/^$|^\+?[0-9 ()-]{10,20}$/, "Captura un teléfono válido.").nullable().optional(),
+    avalCorreo: z.union([z.literal(""), z.email("Captura un correo válido.")]).nullable().optional(),
     estado: z.enum(EstadoContrato),
   })
   .superRefine((input, context) => {
@@ -121,6 +132,7 @@ export const recordIdSchema = uuid;
 
 export type PropietarioInput = z.infer<typeof propietarioInputSchema>;
 export type PerfilUsuarioInput = z.infer<typeof perfilUsuarioInputSchema>;
+export type UsuarioAdministradorInput = z.infer<typeof usuarioAdministradorInputSchema>;
 export type PropiedadInput = z.infer<typeof propiedadInputSchema>;
 export type UnidadInput = z.infer<typeof unidadInputSchema>;
 export type ContratoInput = z.infer<typeof contratoInputSchema>;

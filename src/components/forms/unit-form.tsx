@@ -16,6 +16,10 @@ type UnitDefaults = {
   metrosCuadrados: string;
   descripcion?: string | null;
   piso?: string | null;
+  recamaras?: number;
+  banosCompletos?: number;
+  mediosBanos?: number;
+  amenidades?: string | null;
 };
 
 export function UnitForm({ defaults, propertyId, submitLabel, unitId }: {
@@ -47,9 +51,15 @@ export function UnitForm({ defaults, propertyId, submitLabel, unitId }: {
         <Field label="Piso" hint="Opcional">
           <Input defaultValue={defaults?.piso ?? ""} maxLength={50} name="piso" />
         </Field>
+        <Field label="Recámaras"><Input defaultValue={defaults?.recamaras ?? 0} min={0} name="recamaras" type="number" /></Field>
+        <Field label="Baños completos"><Input defaultValue={defaults?.banosCompletos ?? 0} min={0} name="banosCompletos" type="number" /></Field>
+        <Field label="Medios baños"><Input defaultValue={defaults?.mediosBanos ?? 0} min={0} name="mediosBanos" type="number" /></Field>
       </div>
       <Field label="Descripción" hint="Opcional">
         <Textarea defaultValue={defaults?.descripcion ?? ""} maxLength={2000} name="descripcion" rows={4} />
+      </Field>
+      <Field label="Amenidades" hint="Separadas por coma; ej. estacionamiento, balcón, elevador">
+        <div className="grid grid-cols-2 gap-2 text-sm font-normal sm:grid-cols-3">{["Estacionamiento", "Balcón", "Elevador", "Cisterna", "Aire acondicionado", "Amueblado"].map((item) => <label className="flex items-center gap-2 rounded-lg bg-bg px-3 py-2" key={item}><input defaultChecked={defaults?.amenidades?.split(", ").includes(item)} name="amenidades" type="checkbox" value={item} />{item}</label>)}</div>
       </Field>
       <FormStatus message={undefined} />
       <button className="rounded bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover" type="submit">
