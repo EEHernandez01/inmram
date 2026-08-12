@@ -49,7 +49,7 @@ export function AdminUserForm() {
 
       const response = await fetch("/api/configuracion/usuarios", {
         body: JSON.stringify({
-          neonAuthUserId: createdUser.data.user.id,
+          neonAuthUserId: createdUser.user.id,
         }),
         headers: {
           "content-type": "application/json",
@@ -62,7 +62,7 @@ export function AdminUserForm() {
       if (!response.ok) {
         try {
           await authClient.admin.removeUser(
-            { userId: createdUser.data.user.id },
+            { userId: createdUser.user.id },
             { throw: true },
           );
         } catch {
