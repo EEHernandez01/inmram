@@ -1,6 +1,7 @@
 import { LocationPicker } from "@/components/forms/location-picker";
 import { FormStatus } from "@/components/ui/form-status";
 import { Field, Input } from "@/components/ui/form-controls";
+import { PropertyPhotoInput } from "@/components/forms/property-photo-input";
 
 const defaultMoneyValue = "0.00";
 
@@ -21,8 +22,12 @@ export function PropertyForm({ action = "/api/propiedades", defaults, placesEnab
   placesEnabled: boolean;
   submitLabel: string;
 }) {
+  const transportProps = typeof action === "string"
+    ? { encType: "multipart/form-data", method: "post" }
+    : {};
+
   return (
-    <form action={action} className="space-y-5" method="post">
+    <form action={action} className="space-y-5" {...transportProps}>
       <div className="grid gap-5 sm:grid-cols-2">
         <LocationPicker defaults={{ address: defaults?.direccion, googlePlaceId: defaults?.googlePlaceId, latitude: defaults?.latitud, longitude: defaults?.longitud }} enabled={placesEnabled} />
         <Field label="Valor catastral">
@@ -38,6 +43,7 @@ export function PropertyForm({ action = "/api/propiedades", defaults, placesEnab
           <Input defaultValue={defaults?.mantenimientoAnual ?? defaultMoneyValue} inputMode="decimal" name="mantenimientoAnual" placeholder="0.00" required />
         </Field>
       </div>
+      <PropertyPhotoInput />
       <FormStatus message={undefined} />
       <button className="rounded bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover" type="submit">
         {submitLabel}

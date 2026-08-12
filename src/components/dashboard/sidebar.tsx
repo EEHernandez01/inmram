@@ -2,111 +2,71 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
-const items = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/propiedades", label: "Propiedades" },
-  { href: "/contratos", label: "Contratos" },
-  { href: "/cobranza", label: "Cobranza" },
-  { href: "/inflacion", label: "Inflación" },
-  { href: "/reportes", label: "Rentabilidad" },
-  { href: "/agua", label: "Agua" },
-  { href: "/configuracion/perfil", label: "Mi perfil" },
-  { href: "/configuracion/auditoria", label: "Auditoría" },
-] as const;
+type IconName = "home" | "building" | "file" | "wallet" | "chart" | "drop" | "user" | "team" | "history";
+
+const groups: { label?: string; items: { href: string; label: string; icon: IconName }[] }[] = [
+  { items: [{ href: "/dashboard", label: "Inicio", icon: "home" }] },
+  {
+    label: "Operación diaria",
+    items: [
+      { href: "/cobranza", label: "Cobranza", icon: "wallet" },
+      { href: "/propiedades", label: "Propiedades", icon: "building" },
+      { href: "/contratos", label: "Contratos", icon: "file" },
+    ],
+  },
+  {
+    label: "Análisis",
+    items: [
+      { href: "/reportes", label: "Rentabilidad", icon: "chart" },
+      { href: "/inflacion", label: "Actualización de rentas", icon: "chart" },
+      { href: "/agua", label: "Consumo de agua", icon: "drop" },
+    ],
+  },
+  {
+    label: "Cuenta y sistema",
+    items: [
+      { href: "/configuracion/perfil", label: "Mi perfil", icon: "user" },
+      { href: "/configuracion/usuarios", label: "Usuarios", icon: "team" },
+      { href: "/configuracion/auditoria", label: "Actividad", icon: "history" },
+    ],
+  },
+];
+
+function Icon({ name }: { name: IconName }) {
+  const paths: Record<IconName, ReactNode> = {
+    home: <><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"/><path d="M9 21v-6h6v6"/></>,
+    building: <><path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/><path d="M16 9h2a2 2 0 0 1 2 2v10M8 7h4M8 11h4M8 15h4M2 21h20"/></>,
+    file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></>,
+    wallet: <><path d="M20 7V5a2 2 0 0 0-2-2H5a3 3 0 0 0 0 6h15v10a2 2 0 0 1-2 2H5a3 3 0 0 1-3-3V6"/><path d="M16 14h.01"/></>,
+    chart: <><path d="M3 3v18h18"/><path d="m7 16 4-5 3 2 5-7"/></>,
+    drop: <path d="M12 2s7 7.2 7 12a7 7 0 0 1-14 0c0-4.8 7-12 7-12Z"/>,
+    user: <><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></>,
+    team: <><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M16 11a3 3 0 1 0-1.5-5.6M16 14.5a6 6 0 0 1 5 5.5"/></>,
+    history: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></>,
+  };
+  return <svg aria-hidden="true" className="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">{paths[name]}</svg>;
+}
 
 function Navigation({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-
-  return (
-    <nav aria-label="Navegación principal" className="space-y-1">
-      {items.map((item) => {
-        const active =
-          pathname === item.href ||
-          (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
-
-        return (
-          <Link
-            className={
-              active
-                ? "flex items-center rounded bg-brand-soft px-3 py-2.5 text-sm font-medium text-brand"
-                : "flex items-center rounded px-3 py-2.5 text-sm font-medium text-ink-secondary hover:bg-bg hover:text-ink"
-            }
-            href={item.href}
-            key={item.href}
-            onClick={onNavigate}
-          >
-            {item.label}
-          </Link>
-        );
-      })}
-    </nav>
-  );
+  return <nav aria-label="Navegación principal" className="space-y-5">
+    {groups.map((group) => <div key={group.label ?? "inicio"}>
+      {group.label ? <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary/70">{group.label}</p> : null}
+      <div className="space-y-1">{group.items.map((item) => {
+        const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
+        return <Link className={active ? "nav-item nav-item-active" : "nav-item"} href={item.href} key={item.href} onClick={onNavigate}><Icon name={item.icon}/><span>{item.label}</span></Link>;
+      })}</div>
+    </div>)}
+  </nav>;
 }
 
-export function Sidebar({
-  alias,
-  email,
-  name,
-}: {
-  alias?: string | null;
-  email: string;
-  name: string;
-}) {
+export function Sidebar({ alias, email, name }: { alias?: string | null; email: string; name: string }) {
   const [open, setOpen] = useState(false);
-
-  return (
-    <>
-      <div className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-surface px-5 py-4 lg:hidden">
-        <Link className="font-serif text-lg font-semibold text-brand" href="/dashboard">
-          Inmobiliaria Ramos
-        </Link>
-        <button
-          aria-expanded={open}
-          aria-label="Abrir navegación"
-          className="rounded border border-border px-3 py-2 text-sm font-semibold text-ink hover:bg-bg"
-          onClick={() => setOpen((value) => !value)}
-          type="button"
-        >
-          Menú
-        </button>
-      </div>
-
-      {open ? (
-        <div className="fixed inset-0 z-30 bg-ink/20 lg:hidden" onClick={() => setOpen(false)}>
-          <aside
-            className="h-full w-60 border-r border-border bg-surface p-5"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-8 flex items-center justify-between">
-              <p className="font-serif text-lg font-semibold text-brand">Inmobiliaria Ramos</p>
-              <button
-                aria-label="Cerrar navegación"
-                className="rounded px-2 py-1 text-sm text-ink-secondary hover:bg-bg hover:text-ink"
-                onClick={() => setOpen(false)}
-                type="button"
-              >
-                Cerrar
-              </button>
-            </div>
-            <Navigation onNavigate={() => setOpen(false)} />
-          </aside>
-        </div>
-      ) : null}
-
-      <aside className="fixed inset-y-0 left-0 hidden w-60 border-r border-border bg-surface p-5 lg:flex lg:flex-col">
-        <Link className="font-serif text-lg font-semibold text-brand" href="/dashboard">
-          Inmobiliaria Ramos
-        </Link>
-        <div className="mt-9 flex-1">
-          <Navigation />
-        </div>
-        <div className="border-t border-border pt-4">
-          <p className="truncate text-xs font-semibold text-ink">{name}</p>
-          <p className="mt-1 truncate text-xs text-ink-secondary">{alias || email}</p>
-        </div>
-      </aside>
-    </>
-  );
+  return <>
+    <header className="mobile-header lg:hidden"><Link className="brand-lockup" href="/dashboard"><span className="brand-mark">R</span><span>Inmobiliaria Ramos</span></Link><button aria-expanded={open} aria-label="Abrir navegación" className="soft-button px-3 py-2 text-sm" onClick={() => setOpen((value) => !value)} type="button">Menú</button></header>
+    {open ? <div className="fixed inset-0 z-30 bg-ink/30 backdrop-blur-sm lg:hidden" onClick={() => setOpen(false)}><aside className="h-full w-[290px] overflow-y-auto bg-bg p-5 shadow-[12px_0_26px_#c7cdd5,-6px_0_18px_#fff]" onClick={(event) => event.stopPropagation()}><div className="mb-8 flex items-center justify-between"><Link className="brand-lockup" href="/dashboard"><span className="brand-mark">R</span><span>Inmobiliaria Ramos</span></Link><button aria-label="Cerrar navegación" className="text-sm text-ink-secondary" onClick={() => setOpen(false)} type="button">Cerrar</button></div><Navigation onNavigate={() => setOpen(false)} /></aside></div> : null}
+    <aside className="fixed inset-y-0 left-0 hidden w-[272px] flex-col bg-bg px-5 py-6 lg:flex"><Link className="brand-lockup" href="/dashboard"><span className="brand-mark">R</span><span>Inmobiliaria Ramos</span></Link><div className="mt-10 flex-1 overflow-y-auto"><Navigation /></div><div className="soft-inset mt-5 flex items-center gap-3 rounded-2xl p-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-sm font-bold text-white">{name.charAt(0).toUpperCase()}</span><div className="min-w-0"><p className="truncate text-xs font-bold text-ink">{name}</p><p className="mt-0.5 truncate text-[11px] text-ink-secondary">{alias || email}</p></div></div></aside>
+  </>;
 }

@@ -36,6 +36,7 @@ export async function sincronizarCobranzaSistema(now = new Date()) {
     select: {
       id: true,
       rentaMensualBase: true,
+      cargoFijoMensual: true,
       diaPago: true,
     },
   });
@@ -47,6 +48,7 @@ export async function sincronizarCobranzaSistema(now = new Date()) {
         periodo: period,
         fechaVencimiento: dueDate,
         monto: contract.rentaMensualBase,
+        cargoFijo: contract.cargoFijoMensual,
         estatus: calculateReceiptStatus({
           currentDate,
           dueDate,
@@ -110,7 +112,7 @@ export async function listarCobranzaMensual({
   const allReceipts = status
     ? await prisma.recibo.findMany({ where: { periodo: period } })
     : receipts;
-  const receiptTotal = (receipt: { monto: { toString(): string }; cargoAgua: { toString(): string } | null }) => Number(receipt.monto) + Number(receipt.cargoAgua ?? 0);
+  const receiptTotal = (receipt: { monto: { toString(): string }; cargoAgua: { toString(): string } | null; cargoFijo: { toString(): string } }) => Number(receipt.monto) + Number(receipt.cargoAgua ?? 0) + Number(receipt.cargoFijo);
   const expected = allReceipts.reduce((sum, receipt) => sum + receiptTotal(receipt), 0);
   const collected = allReceipts
     .filter((receipt) => receipt.estatus === EstadoRecibo.PAGADO)

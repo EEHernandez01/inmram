@@ -133,6 +133,10 @@ function unitInput(formData: FormData) {
     descripcion: optionalValue(formData, "descripcion"),
     piso: optionalValue(formData, "piso"),
     atributos: null,
+    recamaras: Number(value(formData, "recamaras") || 0),
+    banosCompletos: Number(value(formData, "banosCompletos") || 0),
+    mediosBanos: Number(value(formData, "mediosBanos") || 0),
+    amenidades: value(formData, "amenidades").split(",").map((item) => item.trim()).filter(Boolean),
   };
 }
 

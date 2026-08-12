@@ -220,6 +220,7 @@ export function LocationPicker({ defaults, enabled }: { defaults?: LocationDefau
   const [activeIndex, setActiveIndex] = useState(-1);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [searchEnabled, setSearchEnabled] = useState(false);
   const requestId = useRef(0);
   const sessionToken = useRef<AutocompleteSessionToken | null>(null);
   const skipNextSearch = useRef(false);
@@ -231,7 +232,7 @@ export function LocationPicker({ defaults, enabled }: { defaults?: LocationDefau
     }
 
     const trimmedQuery = completeAddress.trim();
-    if (!enabled || !apiKey || trimmedQuery.length < 3 || selection?.address === trimmedQuery) return;
+    if (!searchEnabled || !enabled || !apiKey || trimmedQuery.length < 3 || selection?.address === trimmedQuery) return;
 
     let cancelled = false;
     const currentRequestId = ++requestId.current;
@@ -280,7 +281,7 @@ export function LocationPicker({ defaults, enabled }: { defaults?: LocationDefau
       cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, [apiKey, completeAddress, enabled, selection?.address]);
+  }, [apiKey, completeAddress, enabled, searchEnabled, selection?.address]);
 
   async function chooseSuggestion(suggestion: Suggestion) {
     setLoading(true);
@@ -316,6 +317,7 @@ export function LocationPicker({ defaults, enabled }: { defaults?: LocationDefau
   }
 
   function updateCompleteAddress(value: string) {
+    setSearchEnabled(true);
     setAddressParts({ ...emptyAddressParts, calle: value });
     setCompleteAddress(value);
     setSelection(null);
@@ -361,6 +363,7 @@ export function LocationPicker({ defaults, enabled }: { defaults?: LocationDefau
             autoComplete="street-address"
             maxLength={500}
             name="direccion"
+            onClick={() => setSearchEnabled(true)}
             onChange={(event) => updateCompleteAddress(event.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ej. Av. Insurgentes 300, CDMX"

@@ -1,16 +1,23 @@
 @import "tailwindcss";
 @config "../../tailwind.config.ts";
 
-@theme inline {
-  --font-sans: var(--font-inter);
-  --font-serif: var(--font-source-serif);
-}
+@theme inline { --font-sans: var(--font-inter); --font-serif: var(--font-source-serif); }
 
-body {
-  margin: 0;
-}
+:root { --neo-bg: #e9edf2; --neo-shadow-dark: #c6cdd6; --neo-shadow-light: #ffffff; }
+body { margin: 0; background: var(--neo-bg); }
+::selection { background: #cddbea; color: #102a43; }
 
-:where(a, button, input, select, textarea, [tabindex]):focus-visible {
-  outline: 2px solid var(--color-brand, #1e3a5f);
-  outline-offset: 2px;
-}
+.brand-lockup { display: inline-flex; align-items: center; gap: .65rem; color: #173a5e; font-family: var(--font-source-serif); font-size: 1.1rem; font-weight: 700; letter-spacing: -.02em; }
+.brand-mark { display: inline-flex; height: 2.25rem; width: 2.25rem; align-items: center; justify-content: center; border-radius: .8rem; background: #1e3a5f; box-shadow: 4px 4px 9px #bdc5cf, -4px -4px 9px #fff; color: #fff; font-family: var(--font-inter); font-size: .9rem; }
+.nav-item { display: flex; align-items: center; gap: .75rem; border-radius: .8rem; padding: .68rem .75rem; color: #667085; font-size: .84rem; font-weight: 600; transition: color .18s ease, box-shadow .18s ease, background .18s ease; }
+.nav-item:hover { color: #1e3a5f; background: rgba(255,255,255,.42); }
+.nav-item-active { background: #e9edf2; box-shadow: inset 3px 3px 7px #c7cdd5, inset -3px -3px 7px #fff; color: #1e3a5f; }
+.soft-button { border-radius: .75rem; background: var(--neo-bg); box-shadow: 4px 4px 9px #c7cdd5, -4px -4px 9px #fff; color: #1e3a5f; font-weight: 700; transition: transform .18s ease, box-shadow .18s ease; }
+.soft-button:hover { transform: translateY(-1px); }
+.soft-inset { background: var(--neo-bg); box-shadow: inset 3px 3px 7px #c7cdd5, inset -3px -3px 7px #fff; }
+.mobile-header { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; background: rgba(233,237,242,.88); padding: 1rem 1.25rem; backdrop-filter: blur(14px); }
+.skeleton { border-radius: .55rem; background: linear-gradient(100deg, #d9e0e7 20%, #f8fafc 42%, #d9e0e7 64%); background-size: 220% 100%; animation: skeleton-shimmer 1.35s ease-in-out infinite; }
+@keyframes skeleton-shimmer { to { background-position: -220% 0; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible { outline: 2px solid var(--color-brand, #1e3a5f); outline-offset: 3px; }

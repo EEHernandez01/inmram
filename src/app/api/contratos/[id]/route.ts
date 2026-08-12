@@ -23,12 +23,15 @@ export async function POST(
       emailArrendatario: formValue(form, "emailArrendatario") || null,
       telefonoArrendatario: formValue(form, "telefonoArrendatario") || null,
       aval: formValue(form, "aval"),
+      avalTelefono: formValue(form, "avalTelefono") || null,
+      avalCorreo: formValue(form, "avalCorreo") || null,
       fechaInicio: formValue(form, "fechaInicio"),
       plazoMeses: Number(formValue(form, "plazoMeses")),
       fechaFin: formValue(form, "fechaFin"),
       rentaMensualBase: formValue(form, "rentaMensualBase"),
       diaPago: Number(formValue(form, "diaPago")),
       depositoGarantia: formValue(form, "depositoGarantia"),
+      cargoFijoMensual: formValue(form, "cargoFijoMensual") || "0.00",
       estado: String(form.get("estado") ?? "ACTIVO") as "ACTIVO" | "VENCIDO",
     });
 

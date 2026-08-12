@@ -38,6 +38,17 @@ enum FormaPago {
   TRANSFERENCIA
 }
 
+enum EstadoRenovacion {
+  PENDIENTE
+  RENOVADO
+  NO_RENOVADO
+}
+
+enum TipoArchivo {
+  FOTO_PROPIEDAD
+  CONTRATO_PDF
+}
+
 model UsuarioSistema {
   id             String              @id @default(uuid()) @db.Uuid
   neonAuthUserId String              @unique
@@ -97,6 +108,7 @@ model Propiedad {
   propietario         Propietario @relation(fields: [propietarioId], references: [id], onDelete: Restrict)
   marca               Marca?      @relation(fields: [marcaId], references: [id], onDelete: SetNull)
   unidades            Unidad[]
+  archivos            ArchivoExpediente[]
   creadoEn            DateTime    @default(now())
   actualizadoEn       DateTime    @updatedAt
 
@@ -114,6 +126,10 @@ model Unidad {
   descripcion     String?
   piso            String?
   atributos       Json?
+  recamaras       Int          @default(0)
+  banosCompletos  Int          @default(0)
+  mediosBanos     Int          @default(0)
+  amenidades      Json?
   propiedad       Propiedad    @relation(fields: [propiedadId], references: [id], onDelete: Restrict)
   medidorAgua     MedidorAgua?
   contratos       Contrato[]
@@ -164,10 +180,16 @@ model Contrato {
   rentaMensualBase     Decimal           @db.Decimal(14, 2)
   diaPago              Int
   depositoGarantia     Decimal           @db.Decimal(14, 2)
+  cargoFijoMensual     Decimal           @default(0) @db.Decimal(14, 2)
+  avalTelefono         String?
+  avalCorreo           String?
+  renovacionEstado     EstadoRenovacion  @default(PENDIENTE)
+  renovacionNotificadaEn DateTime?       @db.Date
   estado               EstadoContrato    @default(ACTIVO)
   unidad               Unidad            @relation(fields: [unidadId], references: [id], onDelete: Restrict)
   recibos              Recibo[]
   ajustesInflacion     AjusteInflacion[]
+  archivos             ArchivoExpediente[]
   creadoEn             DateTime          @default(now())
   actualizadoEn        DateTime          @updatedAt
 
@@ -202,6 +224,7 @@ model Recibo {
   fechaPago        DateTime?    @db.Date
   formaPago        FormaPago?
   cargoAgua        Decimal?     @db.Decimal(14, 2)
+  cargoFijo        Decimal      @default(0) @db.Decimal(14, 2)
   contrato         Contrato     @relation(fields: [contratoId], references: [id], onDelete: Restrict)
   creadoEn         DateTime     @default(now())
   actualizadoEn    DateTime     @updatedAt
@@ -211,6 +234,24 @@ model Recibo {
   @@index([periodo])
   @@index([fechaVencimiento])
   @@index([estatus])
+}
+
+model ArchivoExpediente {
+  id          String       @id @default(uuid()) @db.Uuid
+  propiedadId String?      @db.Uuid
+  contratoId  String?      @db.Uuid
+  tipo        TipoArchivo
+  url         String
+  nombre      String
+  mimeType    String
+  tamanoBytes Int
+  orden       Int          @default(0)
+  propiedad   Propiedad?   @relation(fields: [propiedadId], references: [id], onDelete: Cascade)
+  contrato    Contrato?    @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  creadoEn    DateTime     @default(now())
+
+  @@index([propiedadId, tipo, orden])
+  @@index([contratoId, tipo])
 }
 
 model AjusteInflacion {

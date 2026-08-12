@@ -97,6 +97,7 @@ export async function listarPropiedades() {
     include: {
       propietario: true,
       marca: true,
+      archivos: { where: { tipo: "FOTO_PROPIEDAD" }, orderBy: { orden: "asc" }, take: 1 },
       _count: { select: { unidades: true } },
     },
   });
@@ -111,6 +112,7 @@ export async function obtenerPropiedad(propiedadId: string) {
     include: {
       propietario: true,
       marca: true,
+      archivos: { where: { tipo: "FOTO_PROPIEDAD" }, orderBy: { orden: "asc" } },
       unidades: { orderBy: { identificador: "asc" } },
     },
   });

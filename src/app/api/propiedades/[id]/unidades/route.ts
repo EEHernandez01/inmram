@@ -26,6 +26,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       descripcion: formValue(form, "descripcion"),
       piso: formValue(form, "piso"),
       atributos: null,
+      recamaras: Number(form.get("recamaras") ?? 0), banosCompletos: Number(form.get("banosCompletos") ?? 0), mediosBanos: Number(form.get("mediosBanos") ?? 0), amenidades: form.getAll("amenidades").map(String),
     });
 
     return NextResponse.redirect(new URL(`/propiedades/${id}/unidades/${unit.id}`, url), 303);
