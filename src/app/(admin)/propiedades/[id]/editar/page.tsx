@@ -20,9 +20,9 @@ export default async function EditPropertyPage({ params }: { params: Promise<{ i
 
   return (
     <>
-      <PageHeader eyebrow="Propiedades" title="Editar propiedad" />
+      <PageHeader action={<Link className="text-sm font-semibold text-brand hover:text-brand-hover" href={`/propiedades/${id}`}>Ver propiedad</Link>} description={property.direccion} eyebrow="Propiedades" title="Editar propiedad" />
       <section className="mt-7 rounded-card border border-border bg-surface p-5">
-        <PropertyForm action={updatePropertyFormAction.bind(null, id)} defaults={{ direccion: property.direccion, googlePlaceId: property.googlePlaceId ?? undefined, latitud: property.latitud?.toString(), longitud: property.longitud?.toString(), valorCatastral: property.valorCatastral.toString(), valorComercialTotal: property.valorComercialTotal.toString(), predialAnual: property.predialAnual.toString(), mantenimientoAnual: property.mantenimientoAnual.toString() }} placesEnabled={Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY)} submitLabel="Guardar cambios" />
+        <PropertyForm action={updatePropertyFormAction.bind(null, id)} defaults={{ direccion: property.direccion, googlePlaceId: property.googlePlaceId ?? undefined, latitud: property.latitud?.toString(), longitud: property.longitud?.toString(), valorCatastral: property.valorCatastral.toString(), valorComercialTotal: property.valorComercialTotal.toString(), predialAnual: property.predialAnual.toString(), mantenimientoAnual: property.mantenimientoAnual.toString() }} existingPhotos={property.archivos.map(({ id: photoId, nombre, url }) => ({ id: photoId, nombre, url }))} placesEnabled={Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY)} submitLabel="Guardar cambios" />
         <Link className="mt-5 inline-block text-sm font-semibold text-brand hover:text-brand-hover" href={`/propiedades/${id}`}>Cancelar</Link>
       </section>
     </>

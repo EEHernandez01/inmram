@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { z } from "zod";
 
 import { EstadoContrato, TipoUnidad } from "@/generated/prisma/enums";
@@ -19,6 +21,7 @@ import {
   vencerContrato,
 } from "@/lib/services/foundation";
 import { obtenerPropietarioActual } from "@/lib/services/profile";
+import { prisma } from "@/lib/db/prisma";
 
 export type FoundationActionState = { error?: string };
 
@@ -109,6 +112,7 @@ export async function updatePropertyFormAction(propertyId: string, formData: For
   try {
     const owner = await obtenerPropietarioActual();
     await actualizarPropiedad(propertyId, propertyInput(formData, owner.id));
+    await guardarFotosDePropiedad(propertyId, formData);
   } catch (error) {
     throw new Error(errorState(error).error);
   }
