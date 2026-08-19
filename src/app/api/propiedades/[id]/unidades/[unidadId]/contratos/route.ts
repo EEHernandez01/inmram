@@ -23,6 +23,8 @@ export async function POST(
       emailArrendatario: formValue(form, "emailArrendatario") || null,
       telefonoArrendatario: formValue(form, "telefonoArrendatario") || null,
       aval: formValue(form, "aval"),
+      tipoGarantia: formValue(form, "tipoGarantia") as "AVAL" | "PRENDA" | "INMUEBLE",
+      valorGarantia: formValue(form, "valorGarantia") || null,
       avalTelefono: formValue(form, "avalTelefono") || null,
       avalCorreo: formValue(form, "avalCorreo") || null,
       fechaInicio: formValue(form, "fechaInicio"),

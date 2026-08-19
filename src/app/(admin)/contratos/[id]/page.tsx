@@ -31,7 +31,8 @@ export default async function ContractDetailPage({ params, searchParams }: { par
         <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
           {[
             ["Estado", contract.estado === "ACTIVO" ? "Activo" : "Vencido"],
-            ["Aval", contract.aval],
+            ["Garantía", `${contract.tipoGarantia === "AVAL" ? "Aval" : contract.tipoGarantia === "PRENDA" ? "Prenda" : "Inmueble"}: ${contract.aval}`],
+            ...(contract.valorGarantia ? [["Valuación de la prenda", formatCurrency(contract.valorGarantia)]] : []),
             ["Correo", contract.emailArrendatario || "No registrado"],
             ["Teléfono", contract.telefonoArrendatario || "No registrado"],
             ["Inicio", formatDate(contract.fechaInicio)],

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { EstadoContrato, TipoUnidad } from "@/generated/prisma/enums";
+import { EstadoContrato, TipoGarantia, TipoUnidad } from "@/generated/prisma/enums";
 
 const requiredText = z
   .string()
@@ -107,6 +107,8 @@ export const contratoInputSchema = z
     emailArrendatario: z.email("Captura un correo válido.").max(254).nullable().optional(),
     telefonoArrendatario: z.string().trim().regex(/^\+?[0-9 ()-]{10,20}$/, "Captura un teléfono válido.").nullable().optional(),
     aval: requiredText,
+    tipoGarantia: z.enum(TipoGarantia).default(TipoGarantia.AVAL),
+    valorGarantia: money.nullable().optional(),
     fechaInicio: date,
     plazoMeses: z.coerce.number().int().positive().max(1_200),
     fechaFin: date,
@@ -125,6 +127,9 @@ export const contratoInputSchema = z
         message: "La fecha final debe ser posterior a la fecha de inicio.",
         path: ["fechaFin"],
       });
+    }
+    if (input.tipoGarantia === TipoGarantia.PRENDA && !input.valorGarantia) {
+      context.addIssue({ code: "custom", message: "Captura la valuación de la prenda.", path: ["valorGarantia"] });
     }
   });
 
