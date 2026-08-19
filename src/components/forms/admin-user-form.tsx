@@ -3,6 +3,7 @@
 import { type FormEvent, useState } from "react";
 
 import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/form-controls";
 import { authClient } from "@/lib/auth/client";
 
@@ -98,13 +99,12 @@ export function AdminUserForm() {
       {error ? <Alert variant="danger">{error}</Alert> : null}
       {success ? <Alert variant="success">{success}</Alert> : null}
 
-      <button
-        className="rounded bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
+      <Button
         disabled={pending}
         type="submit"
       >
         {pending ? "Registrando…" : "Crear usuario"}
-      </button>
+      </Button>
     </form>
   );
 }

@@ -1,4 +1,5 @@
 import { Field, Input } from "@/components/ui/form-controls";
+import { Button } from "@/components/ui/button";
 
 export function ProfileForm({ defaults }: { defaults: {
   nombreCompleto: string;
@@ -26,9 +27,9 @@ export function ProfileForm({ defaults }: { defaults: {
           <Input autoCapitalize="characters" autoComplete="off" defaultValue={defaults.rfc ?? ""} maxLength={13} name="rfc" />
         </Field>
       </div>
-      <button className="rounded bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover" type="submit">
+      <Button type="submit">
         Guardar perfil
-      </button>
+      </Button>
     </form>
   );
 }
