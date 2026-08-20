@@ -194,6 +194,7 @@ export async function crearUnidad(input: UnidadInput) {
     data: {
       ...data,
       atributos: normalizarAtributos(data.atributos),
+      amenidades: normalizarAtributos(data.amenidades),
     },
   });
 }
@@ -208,6 +209,7 @@ export async function actualizarUnidad(unidadId: string, input: UnidadInput) {
     data: {
       ...data,
       atributos: normalizarAtributos(data.atributos),
+      amenidades: normalizarAtributos(data.amenidades),
     },
   });
 }
@@ -364,10 +366,10 @@ async function asegurarUnidadSinContratoActivo(
   }
 }
 
-function normalizarAtributos(atributos: UnidadInput["atributos"]) {
-  if (atributos === null) {
+function normalizarAtributos(value: UnidadInput["atributos"] | UnidadInput["amenidades"]) {
+  if (value === null) {
     return Prisma.JsonNull;
   }
 
-  return atributos;
+  return value;
 }

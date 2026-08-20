@@ -258,12 +258,15 @@ function contractInput(formData: FormData) {
     aval: value(formData, "aval"),
     tipoGarantia: value(formData, "tipoGarantia") as "AVAL" | "PRENDA" | "INMUEBLE",
     valorGarantia: optionalValue(formData, "valorGarantia"),
+    avalTelefono: optionalValue(formData, "avalTelefono"),
+    avalCorreo: optionalValue(formData, "avalCorreo"),
     fechaInicio: value(formData, "fechaInicio"),
     plazoMeses: Number(value(formData, "plazoMeses")),
     fechaFin: value(formData, "fechaFin"),
     rentaMensualBase: value(formData, "rentaMensualBase"),
     diaPago: Number(value(formData, "diaPago")),
     depositoGarantia: value(formData, "depositoGarantia"),
+    cargoFijoMensual: value(formData, "cargoFijoMensual") || "0.00",
     estado: value(formData, "estado") as EstadoContrato,
   };
 }
