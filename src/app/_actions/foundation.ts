@@ -267,6 +267,8 @@ function contractInput(formData: FormData) {
     diaPago: Number(value(formData, "diaPago")),
     depositoGarantia: value(formData, "depositoGarantia"),
     cargoFijoMensual: value(formData, "cargoFijoMensual") || "0.00",
+    avalTelefono: optionalValue(formData, "avalTelefono"),
+    avalCorreo: optionalValue(formData, "avalCorreo"),
     estado: value(formData, "estado") as EstadoContrato,
   };
 }
