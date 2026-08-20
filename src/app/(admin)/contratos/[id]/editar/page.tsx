@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ContractForm } from "@/components/forms/contract-form";
@@ -20,8 +19,7 @@ export default async function EditContractPage({ params, searchParams }: { param
       <PageHeader description={`${contract.unidad.propiedad.direccion} · Unidad ${contract.unidad.identificador}`} eyebrow="Contratos" title="Editar contrato" />
       <section className="mt-7 rounded-card border border-border bg-surface p-5">
         {query.error ? <Alert className="mb-5" variant="danger">{query.error}</Alert> : null}
-        <ContractForm defaults={{ arrendatario: contract.arrendatario, emailArrendatario: contract.emailArrendatario, telefonoArrendatario: contract.telefonoArrendatario, aval: contract.aval, fechaInicio: toDateInput(contract.fechaInicio), plazoMeses: contract.plazoMeses, fechaFin: toDateInput(contract.fechaFin), rentaMensualBase: contract.rentaMensualBase.toString(), diaPago: contract.diaPago, depositoGarantia: contract.depositoGarantia.toString(), estado: contract.estado }} propertyId={contract.unidad.propiedadId} submitLabel="Guardar cambios" unitId={contract.unidadId} contractId={id} />
-        <Link className="mt-5 inline-block text-sm font-semibold text-brand hover:text-brand-hover" href={`/contratos/${id}`}>Cancelar</Link>
+        <ContractForm cancelHref={`/contratos/${id}`} defaults={{ arrendatario: contract.arrendatario, emailArrendatario: contract.emailArrendatario, telefonoArrendatario: contract.telefonoArrendatario, aval: contract.aval, tipoGarantia: contract.tipoGarantia, valorGarantia: contract.valorGarantia?.toString(), avalTelefono: contract.avalTelefono, avalCorreo: contract.avalCorreo, fechaInicio: toDateInput(contract.fechaInicio), plazoMeses: contract.plazoMeses, fechaFin: toDateInput(contract.fechaFin), rentaMensualBase: contract.rentaMensualBase.toString(), diaPago: contract.diaPago, depositoGarantia: contract.depositoGarantia.toString(), cargoFijoMensual: contract.cargoFijoMensual.toString(), estado: contract.estado }} propertyId={contract.unidad.propiedadId} submitLabel="Guardar cambios" unitId={contract.unidadId} contractId={id} />
       </section>
     </>
   );

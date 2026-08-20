@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { ContractForm } from "@/components/forms/contract-form";
@@ -19,10 +18,9 @@ export default async function NewContractPage({ params, searchParams }: { params
   return (
     <>
       <PageHeader description={`${unit.propiedad.direccion} · Unidad ${unit.identificador}`} eyebrow="Contratos" title="Nuevo contrato" />
-      <section className="mt-7 rounded-card border border-border bg-surface p-5">
+      <section className="mt-7 rounded-3xl bg-bg p-6 shadow-[7px_7px_15px_#c6cdd6,-7px_-7px_15px_#fff] sm:p-7">
         {query.error ? <Alert className="mb-5" variant="danger">{query.error}</Alert> : null}
-        <ContractForm propertyId={unit.propiedadId} submitLabel="Guardar contrato" unitId={unidadId} />
-        <Link className="mt-5 inline-block text-sm font-semibold text-brand hover:text-brand-hover" href={`/propiedades/${unit.propiedadId}/unidades/${unidadId}`}>Cancelar</Link>
+        <ContractForm cancelHref={`/propiedades/${unit.propiedadId}/unidades/${unidadId}`} propertyId={unit.propiedadId} submitLabel="Guardar contrato" unitId={unidadId} />
       </section>
     </>
   );

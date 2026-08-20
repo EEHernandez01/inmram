@@ -1,5 +1,6 @@
 import { Field, Input, Select, Textarea } from "@/components/ui/form-controls";
 import { FormStatus } from "@/components/ui/form-status";
+import { Button } from "@/components/ui/button";
 
 const unitTypes = [
   ["DEPARTAMENTO", "Departamento"],
@@ -62,9 +63,9 @@ export function UnitForm({ defaults, propertyId, submitLabel, unitId }: {
         <div className="grid grid-cols-2 gap-2 text-sm font-normal sm:grid-cols-3">{["Estacionamiento", "Balcón", "Elevador", "Cisterna", "Aire acondicionado", "Amueblado"].map((item) => <label className="flex items-center gap-2 rounded-lg bg-bg px-3 py-2" key={item}><input defaultChecked={defaults?.amenidades?.split(", ").includes(item)} name="amenidades" type="checkbox" value={item} />{item}</label>)}</div>
       </Field>
       <FormStatus message={undefined} />
-      <button className="rounded bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover" type="submit">
+      <Button type="submit">
         {submitLabel}
-      </button>
+      </Button>
     </form>
   );
 }

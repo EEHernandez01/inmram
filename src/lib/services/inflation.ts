@@ -90,8 +90,10 @@ export async function renovarContrato(contratoId: string, input: unknown) {
   return prisma.$transaction(async (tx) => {
     await tx.contrato.update({ where: { id }, data: { estado: EstadoContrato.VENCIDO } });
     const renewed = await tx.contrato.create({ data: {
-      unidadId: contract.unidadId, arrendatario: contract.arrendatario, aval: contract.aval,
+      unidadId: contract.unidadId, arrendatario: contract.arrendatario, aval: contract.aval, tipoGarantia: contract.tipoGarantia,
+      valorGarantia: contract.valorGarantia,
       emailArrendatario: contract.emailArrendatario, telefonoArrendatario: contract.telefonoArrendatario,
+      avalTelefono: contract.avalTelefono, avalCorreo: contract.avalCorreo,
       fechaInicio: startDate, fechaFin: inflationDate(data.fechaFin), plazoMeses: data.plazoMeses,
       rentaMensualBase: rent.toFixed(2), diaPago: contract.diaPago,
       depositoGarantia: contract.depositoGarantia, estado: EstadoContrato.ACTIVO,

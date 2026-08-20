@@ -27,6 +27,12 @@ enum EstadoContrato {
   VENCIDO
 }
 
+enum TipoGarantia {
+  AVAL
+  PRENDA
+  INMUEBLE
+}
+
 enum EstadoRecibo {
   PENDIENTE
   PAGADO
@@ -174,6 +180,8 @@ model Contrato {
   emailArrendatario    String?
   telefonoArrendatario String?
   aval                 String
+  tipoGarantia         TipoGarantia      @default(AVAL)
+  valorGarantia        Decimal?          @db.Decimal(14, 2)
   fechaInicio          DateTime          @db.Date
   plazoMeses           Int
   fechaFin             DateTime          @db.Date
