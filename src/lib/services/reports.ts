@@ -1,22 +1,24 @@
 import "server-only";
 
 import { EstadoContrato } from "@/generated/prisma/enums";
-import { READ_ROLES, requireSystemRole } from "@/lib/auth/authorization";
+import { getOwnerScope, requireSystemRole } from "@/lib/auth/authorization";
+import { RolUsuario } from "@/generated/prisma/enums";
 import { calculatePortfolioProfitability, calculateUnitProfitability } from "@/lib/calculations/profitability";
 import { prisma } from "@/lib/db/prisma";
 import { propertyReportFilterSchema } from "@/lib/validation/reports";
 
-export async function obtenerReporteRentabilidad(propertyFilter?: unknown) {
-  await requireSystemRole(READ_ROLES);
+export async function obtenerReporteRentabilidad(propertyFilter?: unknown, allowOwner = false) {
+  await requireSystemRole(allowOwner ? [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR, RolUsuario.PROPIETARIO, RolUsuario.SOLO_LECTURA] : [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR, RolUsuario.SOLO_LECTURA]);
+  const ownerId = await getOwnerScope();
   const parsed = propertyReportFilterSchema.parse(propertyFilter);
   const propertyId = parsed || undefined;
   const [properties, options] = await Promise.all([
     prisma.propiedad.findMany({
-      where: propertyId ? { id: propertyId } : undefined,
+      where: { id: propertyId, propietarioId: ownerId ?? undefined },
       orderBy: { direccion: "asc" },
       include: { unidades: { orderBy: { identificador: "asc" }, include: { contratos: { where: { estado: EstadoContrato.ACTIVO }, orderBy: { fechaInicio: "desc" }, take: 1 } } } },
     }),
-    prisma.propiedad.findMany({ orderBy: { direccion: "asc" }, select: { id: true, direccion: true } }),
+    prisma.propiedad.findMany({ where: { propietarioId: ownerId ?? undefined }, orderBy: { direccion: "asc" }, select: { id: true, direccion: true } }),
   ]);
 
   const propertyReports = properties.map((property) => {

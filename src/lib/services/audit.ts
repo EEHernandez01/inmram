@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
-import { READ_ROLES, requireSystemRole } from "@/lib/auth/authorization";
+import { ADMIN_ROLES, requireSystemRole } from "@/lib/auth/authorization";
 import { prisma } from "@/lib/db/prisma";
 
 type AuditClient = Prisma.TransactionClient;
@@ -11,6 +11,6 @@ export function registrarAuditoria(client: AuditClient, input: { usuarioSistemaI
 }
 
 export async function listarAuditoria() {
-  await requireSystemRole(READ_ROLES);
+  await requireSystemRole(ADMIN_ROLES);
   return prisma.registroAuditoria.findMany({ take: 100, orderBy: { creadoEn: "desc" }, include: { usuarioSistema: { include: { perfil: true } } } });
 }

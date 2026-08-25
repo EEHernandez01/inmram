@@ -3,7 +3,6 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { crearPropiedad } from "@/lib/services/foundation";
-import { obtenerPropietarioActual } from "@/lib/services/profile";
 import { prisma } from "@/lib/db/prisma";
 import { isSameOrigin, safeRouteError } from "@/lib/http/route-security";
 
@@ -20,10 +19,8 @@ export async function POST(request: Request) {
 
   try {
     const form = await request.formData();
-    const owner = await obtenerPropietarioActual();
-
     const property = await crearPropiedad({
-      propietarioId: owner.id,
+      propietarioId: String(form.get("propietarioId") ?? ""),
       marcaId: formValue(form, "marcaId"),
       direccion: String(form.get("direccion") ?? ""),
       googlePlaceId: formValue(form, "googlePlaceId"),

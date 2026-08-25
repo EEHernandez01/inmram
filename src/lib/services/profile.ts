@@ -52,7 +52,7 @@ export async function guardarPerfilActual(input: PerfilUsuarioInput) {
       },
     });
 
-    if (user.rol === RolUsuario.DUENO) {
+    if (user.rol === RolUsuario.ADMINISTRADOR || user.rol === RolUsuario.PROPIETARIO) {
       const linkedOwner = await transaction.propietario.findUnique({
         where: { usuarioSistemaId: user.id },
       });
@@ -93,10 +93,10 @@ export async function obtenerPropietarioActual() {
 
   const owner =
     ownOwner ??
-    (user.rol === RolUsuario.ADMINISTRADOR
+    (user.rol === RolUsuario.GESTOR
       ? await prisma.propietario.findFirst({
           where: {
-            usuarioSistema: { rol: RolUsuario.DUENO, activo: true },
+            usuarioSistema: { rol: RolUsuario.ADMINISTRADOR, activo: true },
           },
           orderBy: { creadoEn: "asc" },
         })

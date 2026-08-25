@@ -10,7 +10,7 @@ import { signOut } from "./actions";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const [{ session, user }, profitability] = await Promise.all([getSystemUser(), obtenerReporteRentabilidad()]);
+  const [{ session, user }, profitability] = await Promise.all([getSystemUser(), obtenerReporteRentabilidad(undefined, true)]);
 
   return (
     <>

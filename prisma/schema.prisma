@@ -8,8 +8,9 @@ datasource db {
 }
 
 enum RolUsuario {
-  DUENO
   ADMINISTRADOR
+  GESTOR
+  PROPIETARIO
   SOLO_LECTURA
 }
 

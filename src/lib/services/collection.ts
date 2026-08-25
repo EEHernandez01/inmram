@@ -1,7 +1,7 @@
 import "server-only";
 
 import { EstadoContrato, EstadoRecibo } from "@/generated/prisma/enums";
-import { READ_ROLES, requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
+import { getOwnerScope, READ_ROLES, requireReceiptPaymentAccess, requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
 import {
   calculateOverdueDays,
   calculateReceiptDueDate,
@@ -94,8 +94,9 @@ export async function listarCobranzaMensual({
   now?: Date;
 }) {
   await requireSystemRole(READ_ROLES);
+  const ownerId = await getOwnerScope();
   const receipts = await prisma.recibo.findMany({
-    where: { periodo: period, estatus: status },
+    where: { periodo: period, estatus: status, contrato: ownerId ? { unidad: { propiedad: { propietarioId: ownerId } } } : undefined },
     orderBy: [
       { contrato: { unidad: { propiedad: { direccion: "asc" } } } },
       { contrato: { unidad: { identificador: "asc" } } },
@@ -110,7 +111,7 @@ export async function listarCobranzaMensual({
   });
 
   const allReceipts = status
-    ? await prisma.recibo.findMany({ where: { periodo: period } })
+    ? await prisma.recibo.findMany({ where: { periodo: period, contrato: ownerId ? { unidad: { propiedad: { propietarioId: ownerId } } } : undefined } })
     : receipts;
   const receiptTotal = (receipt: { monto: { toString(): string }; cargoAgua: { toString(): string } | null; cargoFijo: { toString(): string } }) => Number(receipt.monto) + Number(receipt.cargoAgua ?? 0) + Number(receipt.cargoFijo);
   const expected = allReceipts.reduce((sum, receipt) => sum + receiptTotal(receipt), 0);
@@ -147,8 +148,9 @@ export async function marcarReciboPagado(
   input: PaymentInput,
   now = new Date(),
 ) {
-  const { user } = await requireSystemRole(WRITE_ROLES);
+  const { user } = await requireSystemRole(["ADMINISTRADOR", "GESTOR", "PROPIETARIO"] as const);
   const id = recordIdSchema.parse(receiptId);
+  await requireReceiptPaymentAccess(id);
   const data = paymentInputSchema.parse(input);
   const paymentDate = toDatabaseDate(data.fechaPago);
 

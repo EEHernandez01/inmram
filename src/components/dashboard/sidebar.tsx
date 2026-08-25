@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
+import { RolUsuario } from "@/generated/prisma/enums";
 
 type IconName = "home" | "building" | "file" | "wallet" | "chart" | "drop" | "user" | "team" | "history";
 
-const groups: { label?: string; items: { href: string; label: string; icon: IconName }[] }[] = [
+const groups: { label?: string; items: { href: string; label: string; icon: IconName; roles?: readonly RolUsuario[] }[] }[] = [
   { items: [{ href: "/dashboard", label: "Inicio", icon: "home" }] },
   {
     label: "Operación diaria",
@@ -19,17 +20,17 @@ const groups: { label?: string; items: { href: string; label: string; icon: Icon
   {
     label: "Análisis",
     items: [
-      { href: "/reportes", label: "Rentabilidad", icon: "chart" },
-      { href: "/inflacion", label: "Actualización de rentas", icon: "chart" },
-      { href: "/agua", label: "Consumo de agua", icon: "drop" },
+      { href: "/reportes", label: "Rentabilidad", icon: "chart", roles: [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR, RolUsuario.SOLO_LECTURA] },
+      { href: "/inflacion", label: "Actualización de rentas", icon: "chart", roles: [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR] },
+      { href: "/agua", label: "Consumo de agua", icon: "drop", roles: [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR] },
     ],
   },
   {
     label: "Cuenta y sistema",
     items: [
       { href: "/configuracion/perfil", label: "Mi perfil", icon: "user" },
-      { href: "/configuracion/usuarios", label: "Usuarios", icon: "team" },
-      { href: "/configuracion/auditoria", label: "Actividad", icon: "history" },
+      { href: "/configuracion/usuarios", label: "Usuarios", icon: "team", roles: [RolUsuario.ADMINISTRADOR] },
+      { href: "/configuracion/auditoria", label: "Actividad", icon: "history", roles: [RolUsuario.ADMINISTRADOR] },
     ],
   },
 ];
@@ -49,12 +50,12 @@ function Icon({ name }: { name: IconName }) {
   return <svg aria-hidden="true" className="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">{paths[name]}</svg>;
 }
 
-function Navigation({ onNavigate }: { onNavigate?: () => void }) {
+function Navigation({ onNavigate, role }: { onNavigate?: () => void; role: RolUsuario }) {
   const pathname = usePathname();
   return <nav aria-label="Navegación principal" className="space-y-5">
     {groups.map((group) => <div key={group.label ?? "inicio"}>
       {group.label ? <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary/70">{group.label}</p> : null}
-      <div className="space-y-1">{group.items.map((item) => {
+      <div className="space-y-1">{group.items.filter((item) => !item.roles || item.roles.includes(role)).map((item) => {
         const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
         return <Link className={active ? "nav-item nav-item-active" : "nav-item"} href={item.href} key={item.href} onClick={onNavigate}><Icon name={item.icon}/><span>{item.label}</span></Link>;
       })}</div>
@@ -62,11 +63,11 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
   </nav>;
 }
 
-export function Sidebar({ alias, email, name }: { alias?: string | null; email: string; name: string }) {
+export function Sidebar({ alias, email, name, role }: { alias?: string | null; email: string; name: string; role: RolUsuario }) {
   const [open, setOpen] = useState(false);
   return <>
     <header className="mobile-header lg:hidden"><Link className="brand-lockup" href="/dashboard"><span className="brand-mark">R</span><span>Inmobiliaria Ramos</span></Link><button aria-expanded={open} aria-label="Abrir navegación" className="soft-button px-3 py-2 text-sm" onClick={() => setOpen((value) => !value)} type="button">Menú</button></header>
-    {open ? <div className="fixed inset-0 z-30 bg-ink/30 backdrop-blur-sm lg:hidden" onClick={() => setOpen(false)}><aside className="h-full w-[290px] overflow-y-auto bg-bg p-5 shadow-[12px_0_26px_#c7cdd5,-6px_0_18px_#fff]" onClick={(event) => event.stopPropagation()}><div className="mb-8 flex items-center justify-between"><Link className="brand-lockup" href="/dashboard"><span className="brand-mark">R</span><span>Inmobiliaria Ramos</span></Link><button aria-label="Cerrar navegación" className="text-sm text-ink-secondary" onClick={() => setOpen(false)} type="button">Cerrar</button></div><Navigation onNavigate={() => setOpen(false)} /></aside></div> : null}
-    <aside className="fixed inset-y-0 left-0 hidden w-[272px] flex-col bg-bg px-5 py-6 lg:flex"><Link className="brand-lockup" href="/dashboard"><span className="brand-mark">R</span><span>Inmobiliaria Ramos</span></Link><div className="mt-10 flex-1 overflow-y-auto"><Navigation /></div><div className="soft-inset mt-5 flex items-center gap-3 rounded-2xl p-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-sm font-bold text-white">{name.charAt(0).toUpperCase()}</span><div className="min-w-0"><p className="truncate text-xs font-bold text-ink">{name}</p><p className="mt-0.5 truncate text-[11px] text-ink-secondary">{alias || email}</p></div></div></aside>
+    {open ? <div className="fixed inset-0 z-30 bg-ink/30 backdrop-blur-sm lg:hidden" onClick={() => setOpen(false)}><aside className="h-full w-[290px] overflow-y-auto bg-bg p-5 shadow-[12px_0_26px_#c7cdd5,-6px_0_18px_#fff]" onClick={(event) => event.stopPropagation()}><div className="mb-8 flex items-center justify-between"><Link className="brand-lockup" href="/dashboard"><span className="brand-mark">R</span><span>Inmobiliaria Ramos</span></Link><button aria-label="Cerrar navegación" className="text-sm text-ink-secondary" onClick={() => setOpen(false)} type="button">Cerrar</button></div><Navigation onNavigate={() => setOpen(false)} role={role} /></aside></div> : null}
+    <aside className="fixed inset-y-0 left-0 hidden w-[272px] flex-col bg-bg px-5 py-6 lg:flex"><Link className="brand-lockup" href="/dashboard"><span className="brand-mark">R</span><span>Inmobiliaria Ramos</span></Link><div className="mt-10 flex-1 overflow-y-auto"><Navigation role={role} /></div><div className="soft-inset mt-5 flex items-center gap-3 rounded-2xl p-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-sm font-bold text-white">{name.charAt(0).toUpperCase()}</span><div className="min-w-0"><p className="truncate text-xs font-bold text-ink">{name}</p><p className="mt-0.5 truncate text-[11px] text-ink-secondary">{alias || email}</p></div></div></aside>
   </>;
 }

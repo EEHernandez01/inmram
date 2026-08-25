@@ -20,7 +20,6 @@ import {
   eliminarUnidad,
   vencerContrato,
 } from "@/lib/services/foundation";
-import { obtenerPropietarioActual } from "@/lib/services/profile";
 import { prisma } from "@/lib/db/prisma";
 
 export type FoundationActionState = { error?: string };
@@ -45,9 +44,9 @@ function errorState(error: unknown): FoundationActionState {
   return { error: "No fue posible guardar los cambios. Intenta nuevamente." };
 }
 
-function propertyInput(formData: FormData, ownerId: string) {
+function propertyInput(formData: FormData) {
   return {
-    propietarioId: ownerId,
+    propietarioId: value(formData, "propietarioId"),
     marcaId: optionalValue(formData, "marcaId"),
     direccion: value(formData, "direccion"),
     googlePlaceId: optionalValue(formData, "googlePlaceId"),
@@ -66,8 +65,7 @@ export async function createPropertyAction(
 ) {
   let propertyId: string;
   try {
-    const owner = await obtenerPropietarioActual();
-    const property = await crearPropiedad(propertyInput(formData, owner.id));
+    const property = await crearPropiedad(propertyInput(formData));
     propertyId = property.id;
   } catch (error) {
     return errorState(error);
@@ -80,8 +78,7 @@ export async function createPropertyAction(
 export async function createPropertyFormAction(formData: FormData) {
   let propertyId: string;
   try {
-    const owner = await obtenerPropietarioActual();
-    const property = await crearPropiedad(propertyInput(formData, owner.id));
+    const property = await crearPropiedad(propertyInput(formData));
     propertyId = property.id;
   } catch (error) {
     throw new Error(errorState(error).error);
@@ -97,8 +94,7 @@ export async function updatePropertyAction(
   formData: FormData,
 ) {
   try {
-    const owner = await obtenerPropietarioActual();
-    await actualizarPropiedad(propertyId, propertyInput(formData, owner.id));
+    await actualizarPropiedad(propertyId, propertyInput(formData));
   } catch (error) {
     return errorState(error);
   }
@@ -110,8 +106,7 @@ export async function updatePropertyAction(
 
 export async function updatePropertyFormAction(propertyId: string, formData: FormData) {
   try {
-    const owner = await obtenerPropietarioActual();
-    await actualizarPropiedad(propertyId, propertyInput(formData, owner.id));
+    await actualizarPropiedad(propertyId, propertyInput(formData));
     await guardarFotosDePropiedad(propertyId, formData);
   } catch (error) {
     throw new Error(errorState(error).error);

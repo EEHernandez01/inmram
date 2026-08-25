@@ -1,7 +1,7 @@
 import "server-only";
 
 import { EstadoRecibo } from "@/generated/prisma/enums";
-import { READ_ROLES, requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
+import { requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
 import { currentReceiptPeriod } from "@/lib/calculations/collection";
 import { calculateWaterCharge, calculateWaterConsumption } from "@/lib/calculations/water";
 import { prisma } from "@/lib/db/prisma";
@@ -10,7 +10,7 @@ import { registrarAuditoria } from "@/lib/services/audit";
 import { waterMeterInputSchema, waterPeriodDate, waterReadingInputSchema } from "@/lib/validation/water";
 
 export async function listarAgua() {
-  await requireSystemRole(READ_ROLES);
+  await requireSystemRole(WRITE_ROLES);
   const [meters, availableUnits] = await Promise.all([
     prisma.medidorAgua.findMany({ orderBy: { unidad: { propiedad: { direccion: "asc" } } }, include: { unidad: { include: { propiedad: true } }, lecturas: { orderBy: { periodo: "desc" }, take: 13 } } }),
     prisma.unidad.findMany({ where: { medidorAgua: null }, orderBy: [{ propiedad: { direccion: "asc" } }, { identificador: "asc" }], include: { propiedad: true } }),

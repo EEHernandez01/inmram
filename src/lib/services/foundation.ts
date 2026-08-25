@@ -4,6 +4,8 @@ import { Prisma } from "@/generated/prisma/client";
 import { EstadoContrato } from "@/generated/prisma/enums";
 import {
   READ_ROLES,
+  getOwnerScope,
+  requirePropertyAccess,
   requireSystemRole,
   WRITE_ROLES,
 } from "@/lib/auth/authorization";
@@ -31,7 +33,7 @@ import {
 } from "@/lib/validation/foundation";
 
 export async function listarPropietarios() {
-  await requireSystemRole(READ_ROLES);
+  await requireSystemRole(WRITE_ROLES);
 
   return prisma.propietario.findMany({
     orderBy: { nombre: "asc" },
@@ -40,7 +42,7 @@ export async function listarPropietarios() {
 }
 
 export async function obtenerPropietario(propietarioId: string) {
-  await requireSystemRole(READ_ROLES);
+  await requireSystemRole(WRITE_ROLES);
   const id = recordIdSchema.parse(propietarioId);
 
   return prisma.propietario.findUnique({
@@ -91,8 +93,10 @@ export async function eliminarPropietario(propietarioId: string) {
 
 export async function listarPropiedades() {
   await requireSystemRole(READ_ROLES);
+  const ownerId = await getOwnerScope();
 
   return prisma.propiedad.findMany({
+    where: ownerId ? { propietarioId: ownerId } : undefined,
     orderBy: { direccion: "asc" },
     include: {
       propietario: true,
@@ -106,6 +110,7 @@ export async function listarPropiedades() {
 export async function obtenerPropiedad(propiedadId: string) {
   await requireSystemRole(READ_ROLES);
   const id = recordIdSchema.parse(propiedadId);
+  await requirePropertyAccess(id);
 
   return prisma.propiedad.findUnique({
     where: { id },
@@ -161,6 +166,7 @@ export async function eliminarPropiedad(propiedadId: string) {
 export async function listarUnidades(propiedadId: string) {
   await requireSystemRole(READ_ROLES);
   const id = recordIdSchema.parse(propiedadId);
+  await requirePropertyAccess(id);
 
   return prisma.unidad.findMany({
     where: { propiedadId: id },
@@ -175,13 +181,17 @@ export async function listarUnidades(propiedadId: string) {
 export async function obtenerUnidad(unidadId: string) {
   await requireSystemRole(READ_ROLES);
   const id = recordIdSchema.parse(unidadId);
+  const ownerId = await getOwnerScope();
 
-  return prisma.unidad.findUnique({
-    where: { id },
+  return prisma.unidad.findFirst({
+    where: { id, propiedad: ownerId ? { propietarioId: ownerId } : undefined },
     include: {
       propiedad: { include: { propietario: true } },
       medidorAgua: true,
-      contratos: { orderBy: { fechaInicio: "desc" } },
+      contratos: {
+        orderBy: { fechaInicio: "desc" },
+        include: { recibos: { orderBy: { periodo: "desc" } } },
+      },
     },
   });
 }
@@ -242,9 +252,10 @@ export async function eliminarUnidad(unidadId: string) {
 export async function listarContratos(unidadId?: string) {
   await requireSystemRole(READ_ROLES);
   const parsedUnidadId = unidadId ? recordIdSchema.parse(unidadId) : undefined;
+  const ownerId = await getOwnerScope();
 
   return prisma.contrato.findMany({
-    where: parsedUnidadId ? { unidadId: parsedUnidadId } : undefined,
+    where: { unidadId: parsedUnidadId, unidad: ownerId ? { propiedad: { propietarioId: ownerId } } : undefined },
     orderBy: { fechaInicio: "desc" },
     include: {
       unidad: { include: { propiedad: true } },
@@ -256,9 +267,10 @@ export async function listarContratos(unidadId?: string) {
 export async function obtenerContrato(contratoId: string) {
   await requireSystemRole(READ_ROLES);
   const id = recordIdSchema.parse(contratoId);
+  const ownerId = await getOwnerScope();
 
-  return prisma.contrato.findUnique({
-    where: { id },
+  return prisma.contrato.findFirst({
+    where: { id, unidad: ownerId ? { propiedad: { propietarioId: ownerId } } : undefined },
     include: {
       unidad: { include: { propiedad: { include: { propietario: true } } } },
       recibos: { orderBy: { periodo: "desc" } },

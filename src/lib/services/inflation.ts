@@ -1,7 +1,7 @@
 import "server-only";
 
 import { EstadoContrato } from "@/generated/prisma/enums";
-import { READ_ROLES, requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
+import { getSystemUser, requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
 import { calculateInflationFromIndexLevels, calculateRenewedRent, contractExpirationAlertDays, expirationAlertLevel } from "@/lib/calculations/inflation";
 import { currentCollectionDate } from "@/lib/calculations/collection";
 import { prisma } from "@/lib/db/prisma";
@@ -23,7 +23,7 @@ export async function guardarIndiceInflacion(input: unknown) {
 }
 
 export async function obtenerReporteInflacion(anioInput: unknown, indice = "INPC") {
-  await requireSystemRole(READ_ROLES);
+  await requireSystemRole(WRITE_ROLES);
   const anio = inflationYearSchema.parse(anioInput);
   const inicio = new Date(Date.UTC(anio - 1, 11, 1));
   const fin = new Date(Date.UTC(anio + 1, 0, 1));
@@ -36,12 +36,13 @@ export async function obtenerReporteInflacion(anioInput: unknown, indice = "INPC
 }
 
 export async function listarIndicesInflacion(indice = "INPC") {
-  await requireSystemRole(READ_ROLES);
+  await requireSystemRole(WRITE_ROLES);
   return prisma.indiceInflacion.findMany({ where: { indice }, orderBy: { mes: "desc" }, take: 36 });
 }
 
 export async function listarAlertasRenovacion() {
-  await requireSystemRole(READ_ROLES);
+  const { user } = await getSystemUser();
+  if (!WRITE_ROLES.includes(user.rol as (typeof WRITE_ROLES)[number])) return [];
   const hoy = currentCollectionDate();
   const limite = new Date(hoy); limite.setUTCDate(limite.getUTCDate() + 90);
   const contratos = await prisma.contrato.findMany({
