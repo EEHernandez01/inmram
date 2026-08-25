@@ -2,14 +2,16 @@
 
 export function ConfirmSubmitButton({
   children,
+  className = "cursor-pointer text-sm font-semibold text-brand hover:text-brand-hover",
   message,
 }: {
   children: React.ReactNode;
+  className?: string;
   message: string;
 }) {
   return (
     <button
-      className="text-sm font-semibold text-brand hover:text-brand-hover"
+      className={className}
       onClick={(event) => {
         if (!window.confirm(message)) event.preventDefault();
       }}

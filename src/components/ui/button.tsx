@@ -19,7 +19,7 @@ export function Button({
   return (
     <button
       {...props}
-      className={`rounded px-4 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${variantClasses[variant]} ${className}`}
+      className={`cursor-pointer rounded px-4 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${variantClasses[variant]} ${className}`}
       type={type}
     />
   );
