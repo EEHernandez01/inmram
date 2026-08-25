@@ -88,6 +88,16 @@ export function ReceiptDocuments({
       >
         Ver PDF
       </a>
+      {receipt.estatus === EstadoRecibo.PAGADO ? (
+        <a
+          className="text-sm font-semibold text-brand hover:text-brand-hover"
+          href={`/api/recibos/${receipt.id}/comprobante-pago`}
+          rel="noreferrer"
+          target="_blank"
+        >
+          Comprobante de pago
+        </a>
+      ) : null}
       {canWrite &&
       receipt.contrato.emailArrendatario &&
       receipt.estatus !== EstadoRecibo.PAGADO ? (

@@ -1,4 +1,5 @@
 import { EstadoRecibo } from "@/generated/prisma/enums";
+import Link from "next/link";
 import { ReceiptMobileCard } from "@/components/collection/receipt-mobile-card";
 import { receiptStatusLabels } from "@/components/collection/receipt-badge";
 import { ReceiptTable } from "@/components/collection/receipt-table";
@@ -54,6 +55,17 @@ export default async function CollectionPage({
     ["Recibos vencidos", String(summary.recibosVencidos), "text-danger"],
     ["Tasa de morosidad", formatPercent(summary.tasaMorosidad), "text-danger"],
   ] as const;
+  const statusFilters = [
+    { label: "Todos", value: undefined },
+    { label: "Por cobrar", value: EstadoRecibo.PENDIENTE },
+    { label: "Vencidos", value: EstadoRecibo.VENCIDO },
+    { label: "Pagados", value: EstadoRecibo.PAGADO },
+  ] as const;
+  const collectionUrl = (nextStatus?: EstadoRecibo) => {
+    const params = new URLSearchParams({ periodo: periodValue });
+    if (nextStatus) params.set("estatus", nextStatus);
+    return `/cobranza?${params.toString()}`;
+  };
 
   return (
     <>
@@ -90,7 +102,7 @@ export default async function CollectionPage({
         </Alert>
       ) : null}
 
-      <section className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <section aria-label="Resumen del periodo" className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {metrics.map(([label, display, color]) => (
           <div className="rounded-card border border-border bg-surface p-5" key={label}>
             <p className="text-xs font-medium text-ink-secondary">{label}</p>
@@ -102,7 +114,18 @@ export default async function CollectionPage({
       </section>
 
       <section className="mt-7 rounded-card border border-border bg-surface p-5">
-        <form className="flex flex-col gap-4 sm:flex-row sm:items-end" method="get">
+        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+          <div>
+            <p className="text-sm font-semibold text-ink">Explora los pagos del periodo</p>
+            <p className="mt-1 text-sm text-ink-secondary">Empieza por los vencidos y registra un pago directamente desde cada recibo.</p>
+            <nav aria-label="Filtrar cobranza por estatus" className="mt-4 flex flex-wrap gap-2">
+              {statusFilters.map((filter) => {
+                const selected = (filter.value ?? undefined) === status;
+                return <Link className={`rounded-pill px-3 py-1.5 text-sm font-semibold transition-colors ${selected ? "bg-brand text-white" : "bg-bg text-ink-secondary hover:bg-brand-soft hover:text-brand"}`} href={collectionUrl(filter.value)} key={filter.label}>{filter.label}</Link>;
+              })}
+            </nav>
+          </div>
+          <form className="flex flex-col gap-3 sm:flex-row sm:items-end" method="get">
           <Field label="Periodo">
             <Input defaultValue={periodValue} name="periodo" type="month" />
           </Field>
@@ -119,10 +142,18 @@ export default async function CollectionPage({
           <Button className="sm:self-end" type="submit" variant="secondary">
             Aplicar filtros
           </Button>
-        </form>
+          </form>
+        </div>
       </section>
 
       <section className="mt-7">
+        <div className="mb-4 flex items-baseline justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold tracking-tight text-ink">{status ? receiptStatusLabels[status] : "Todos los recibos"}</h2>
+            <p className="mt-1 text-sm text-ink-secondary">{receipts.length} {receipts.length === 1 ? "recibo" : "recibos"} en esta vista</p>
+          </div>
+          {status ? <Link className="text-sm font-semibold text-brand hover:text-brand-hover" href={collectionUrl()}>Ver todos</Link> : null}
+        </div>
         {receipts.length === 0 ? (
           <EmptyState
             description="No hay recibos que coincidan con el periodo y estatus seleccionados."
