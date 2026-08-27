@@ -27,7 +27,7 @@ export default function SignInPage() {
       <section className="w-full max-w-md rounded-card border border-border bg-surface p-6 sm:p-8">
         <div className="mb-8">
           <p className="font-serif text-lg font-semibold text-brand">
-            Inmobiliaria Ramos
+            INMOBILIARIA RAMOS-ROSCH
           </p>
           <h1 className="mt-5 font-serif text-2xl font-semibold text-ink">
             Acceso al sistema

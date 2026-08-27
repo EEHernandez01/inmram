@@ -2,27 +2,26 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { RolUsuario } from "@/generated/prisma/enums";
 
-type IconName = "home" | "building" | "file" | "wallet" | "chart" | "drop" | "user" | "team" | "history";
+type IconName = "home" | "building" | "file" | "wallet" | "chart" | "user" | "team" | "history";
 
 const groups: { label?: string; items: { href: string; label: string; icon: IconName; roles?: readonly RolUsuario[] }[] }[] = [
   { items: [{ href: "/dashboard", label: "Inicio", icon: "home" }] },
   {
     label: "Operación diaria",
     items: [
-      { href: "/cobranza", label: "Cobranza", icon: "wallet" },
-      { href: "/propiedades", label: "Propiedades", icon: "building" },
-      { href: "/contratos", label: "Contratos", icon: "file" },
+      { href: "/cobranza", label: "Cobranza", icon: "wallet", roles: [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR, RolUsuario.PROPIETARIO, RolUsuario.SOLO_LECTURA] },
+      { href: "/propiedades", label: "Propiedades", icon: "building", roles: [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR, RolUsuario.PROPIETARIO, RolUsuario.SOLO_LECTURA] },
+      { href: "/contratos", label: "Contratos", icon: "file", roles: [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR, RolUsuario.PROPIETARIO, RolUsuario.SOLO_LECTURA] },
     ],
   },
   {
     label: "Análisis",
     items: [
-      { href: "/reportes", label: "Rentabilidad", icon: "chart", roles: [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR, RolUsuario.SOLO_LECTURA] },
+      { href: "/reportes", label: "Rentabilidad", icon: "chart", roles: [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR, RolUsuario.PROPIETARIO, RolUsuario.SOLO_LECTURA] },
       { href: "/inflacion", label: "Actualización de rentas", icon: "chart", roles: [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR] },
-      { href: "/agua", label: "Consumo de agua", icon: "drop", roles: [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR] },
     ],
   },
   {
@@ -42,7 +41,6 @@ function Icon({ name }: { name: IconName }) {
     file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></>,
     wallet: <><path d="M20 7V5a2 2 0 0 0-2-2H5a3 3 0 0 0 0 6h15v10a2 2 0 0 1-2 2H5a3 3 0 0 1-3-3V6"/><path d="M16 14h.01"/></>,
     chart: <><path d="M3 3v18h18"/><path d="m7 16 4-5 3 2 5-7"/></>,
-    drop: <path d="M12 2s7 7.2 7 12a7 7 0 0 1-14 0c0-4.8 7-12 7-12Z"/>,
     user: <><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></>,
     team: <><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M16 11a3 3 0 1 0-1.5-5.6M16 14.5a6 6 0 0 1 5 5.5"/></>,
     history: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></>,
@@ -50,24 +48,19 @@ function Icon({ name }: { name: IconName }) {
   return <svg aria-hidden="true" className="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">{paths[name]}</svg>;
 }
 
-function Navigation({ onNavigate, role }: { onNavigate?: () => void; role: RolUsuario }) {
+function Navigation({ role }: { role: RolUsuario }) {
   const pathname = usePathname();
   return <nav aria-label="Navegación principal" className="space-y-5">
     {groups.map((group) => <div key={group.label ?? "inicio"}>
       {group.label ? <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary/70">{group.label}</p> : null}
       <div className="space-y-1">{group.items.filter((item) => !item.roles || item.roles.includes(role)).map((item) => {
         const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
-        return <Link className={active ? "nav-item nav-item-active" : "nav-item"} href={item.href} key={item.href} onClick={onNavigate}><Icon name={item.icon}/><span>{item.label}</span></Link>;
+        return <Link className={active ? "nav-item nav-item-active" : "nav-item"} href={item.href} key={item.href}><Icon name={item.icon}/><span>{item.label}</span></Link>;
       })}</div>
     </div>)}
   </nav>;
 }
 
 export function Sidebar({ alias, email, name, role }: { alias?: string | null; email: string; name: string; role: RolUsuario }) {
-  const [open, setOpen] = useState(false);
-  return <>
-    <header className="mobile-header lg:hidden"><Link className="brand-lockup" href="/dashboard"><span className="brand-mark">R</span><span>Inmobiliaria Ramos</span></Link><button aria-expanded={open} aria-label="Abrir navegación" className="soft-button px-3 py-2 text-sm" onClick={() => setOpen((value) => !value)} type="button">Menú</button></header>
-    {open ? <div className="fixed inset-0 z-30 bg-ink/30 backdrop-blur-sm lg:hidden" onClick={() => setOpen(false)}><aside className="h-full w-[290px] overflow-y-auto bg-bg p-5 shadow-[12px_0_26px_#c7cdd5,-6px_0_18px_#fff]" onClick={(event) => event.stopPropagation()}><div className="mb-8 flex items-center justify-between"><Link className="brand-lockup" href="/dashboard"><span className="brand-mark">R</span><span>Inmobiliaria Ramos</span></Link><button aria-label="Cerrar navegación" className="text-sm text-ink-secondary" onClick={() => setOpen(false)} type="button">Cerrar</button></div><Navigation onNavigate={() => setOpen(false)} role={role} /></aside></div> : null}
-    <aside className="fixed inset-y-0 left-0 hidden w-[272px] flex-col bg-bg px-5 py-6 lg:flex"><Link className="brand-lockup" href="/dashboard"><span className="brand-mark">R</span><span>Inmobiliaria Ramos</span></Link><div className="mt-10 flex-1 overflow-y-auto"><Navigation role={role} /></div><div className="soft-inset mt-5 flex items-center gap-3 rounded-2xl p-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-sm font-bold text-white">{name.charAt(0).toUpperCase()}</span><div className="min-w-0"><p className="truncate text-xs font-bold text-ink">{name}</p><p className="mt-0.5 truncate text-[11px] text-ink-secondary">{alias || email}</p></div></div></aside>
-  </>;
+  return <aside className="fixed inset-y-0 left-0 hidden w-[272px] flex-col bg-bg px-5 py-6 lg:flex"><Link className="brand-lockup" href="/dashboard"><span className="brand-mark">R</span><span>INMOBILIARIA RAMOS-ROSCH</span></Link><div className="mt-10 flex-1 overflow-y-auto"><Navigation role={role} /></div><div className="soft-inset mt-5 flex items-center gap-3 rounded-2xl p-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-sm font-bold text-white">{name.charAt(0).toUpperCase()}</span><div className="min-w-0"><p className="truncate text-xs font-bold text-ink">{name}</p><p className="mt-0.5 truncate text-[11px] text-ink-secondary">{alias || email}</p></div></div></aside>;
 }

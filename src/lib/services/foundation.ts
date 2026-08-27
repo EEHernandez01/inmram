@@ -190,7 +190,12 @@ export async function obtenerUnidad(unidadId: string) {
       medidorAgua: true,
       contratos: {
         orderBy: { fechaInicio: "desc" },
-        include: { recibos: { orderBy: { periodo: "desc" } } },
+        include: {
+          recibos: {
+            orderBy: { periodo: "desc" },
+            include: { pagos: { where: { anuladoEn: null } } },
+          },
+        },
       },
     },
   });
@@ -273,7 +278,10 @@ export async function obtenerContrato(contratoId: string) {
     where: { id, unidad: ownerId ? { propiedad: { propietarioId: ownerId } } : undefined },
     include: {
       unidad: { include: { propiedad: { include: { propietario: true } } } },
-      recibos: { orderBy: { periodo: "desc" } },
+      recibos: {
+        orderBy: { periodo: "desc" },
+        include: { pagos: { where: { anuladoEn: null } } },
+      },
       ajustesInflacion: { orderBy: { fechaAplicacion: "desc" } },
     },
   });
@@ -312,6 +320,7 @@ export async function crearContrato(input: ContratoInput) {
           periodo: period,
           fechaVencimiento: dueDate,
           monto: data.rentaMensualBase,
+          cargoFijo: data.cargoFijoMensual,
           estatus: calculateReceiptStatus({
             currentDate: currentCollectionDate(),
             dueDate,

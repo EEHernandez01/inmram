@@ -7,6 +7,7 @@ import { ReceiptBadge } from "@/components/collection/receipt-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { getSystemUser, WRITE_ROLES } from "@/lib/auth/authorization";
+import { calculateReceiptPaymentBalance, calculateReceiptTotal } from "@/lib/calculations/collection";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { obtenerUnidad } from "@/lib/services/foundation";
 
@@ -19,6 +20,10 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ id:
   if (!unit || unit.propiedadId !== id) notFound();
   const canWrite = WRITE_ROLES.includes(user.rol as (typeof WRITE_ROLES)[number]);
   const activeContract = unit.contratos.find((contract) => contract.estado === "ACTIVO");
+  const activeReceiptAccounts = activeContract ? activeContract.recibos.map((receipt) => {
+    const total = calculateReceiptTotal({ rent: Number(receipt.monto), servicesCharge: Number(receipt.cargoFijo) });
+    return { receipt, total, ...calculateReceiptPaymentBalance({ total, payments: receipt.pagos.map((payment) => ({ amount: Number(payment.monto) })) }) };
+  }) : [];
 
   return (
     <>
@@ -31,7 +36,7 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ id:
 
       {activeContract ? <section className="mt-8">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[.13em] text-brand/70">Contrato vigente</p><h2 className="mt-1 font-serif text-2xl font-semibold text-ink">Historial de pagos</h2><p className="mt-1 text-sm text-ink-secondary">{activeContract.arrendatario} · pagos registrados de este contrato.</p></div><div className="flex gap-4"><Link className="text-sm font-semibold text-brand hover:text-brand-hover" href={`/contratos/${activeContract.id}`}>Ver contrato</Link><Link className="text-sm font-semibold text-brand hover:text-brand-hover" href="/cobranza">Gestionar cobranza</Link></div></div>
-        {activeContract.recibos.length === 0 ? <EmptyState description="Aún no se han generado recibos para el contrato vigente." title="Sin pagos registrados" /> : <div className="overflow-x-auto rounded-3xl bg-bg shadow-[7px_7px_15px_#c6cdd6,-7px_-7px_15px_#fff]"><table className="w-full min-w-[720px] text-left text-sm"><thead className="border-b border-brand/10 text-[10px] font-bold uppercase tracking-[.1em] text-ink-secondary"><tr><th className="px-6 py-4">Periodo</th><th className="px-6 py-4">Vencimiento</th><th className="px-6 py-4">Estatus</th><th className="px-6 py-4">Pago registrado</th><th className="px-6 py-4 text-right">Total</th></tr></thead><tbody className="divide-y divide-brand/10">{activeContract.recibos.map((receipt) => <tr className="transition hover:bg-white/35" key={receipt.id}><td className="px-6 py-5 font-semibold capitalize text-ink">{formatReceiptPeriod(receipt.periodo)}</td><td className="px-6 py-5 text-ink-secondary">{formatDate(receipt.fechaVencimiento)}</td><td className="px-6 py-5"><ReceiptBadge status={receipt.estatus} /></td><td className="px-6 py-5 text-ink-secondary">{receipt.fechaPago ? `${formatDate(receipt.fechaPago)} · ${receipt.formaPago === "EFECTIVO" ? "Efectivo" : "Transferencia"}` : "Pendiente"}</td><td className="px-6 py-5 text-right font-bold text-ink [font-variant-numeric:tabular-nums]">{formatCurrency(Number(receipt.monto) + Number(receipt.cargoAgua ?? 0) + Number(receipt.cargoFijo))}</td></tr>)}</tbody></table></div>}
+        {activeContract.recibos.length === 0 ? <EmptyState description="Aún no se han generado recibos para el contrato vigente." title="Sin pagos registrados" /> : <div className="overflow-x-auto rounded-3xl bg-bg shadow-[7px_7px_15px_#c6cdd6,-7px_-7px_15px_#fff]"><table className="w-full min-w-[720px] text-left text-sm"><thead className="border-b border-brand/10 text-[10px] font-bold uppercase tracking-[.1em] text-ink-secondary"><tr><th className="px-6 py-4">Periodo</th><th className="px-6 py-4">Vencimiento</th><th className="px-6 py-4">Estatus</th><th className="px-6 py-4">Pagado / saldo</th><th className="px-6 py-4 text-right">Total</th></tr></thead><tbody className="divide-y divide-brand/10">{activeReceiptAccounts.map(({ receipt, total, montoPagado, saldoPendiente }) => <tr className="transition hover:bg-white/35" key={receipt.id}><td className="px-6 py-5 font-semibold capitalize text-ink">{formatReceiptPeriod(receipt.periodo)}</td><td className="px-6 py-5 text-ink-secondary">{formatDate(receipt.fechaVencimiento)}</td><td className="px-6 py-5"><ReceiptBadge status={receipt.estatus} /></td><td className="px-6 py-5 text-ink-secondary"><span className="font-semibold text-ink">{formatCurrency(montoPagado)}</span><span className={saldoPendiente > 0 ? "ml-2 text-danger" : "ml-2 text-success"}>Saldo {formatCurrency(saldoPendiente)}</span></td><td className="px-6 py-5 text-right font-bold text-ink [font-variant-numeric:tabular-nums]">{formatCurrency(total)}</td></tr>)}</tbody></table></div>}
       </section> : null}
 
       <section className="mt-8">

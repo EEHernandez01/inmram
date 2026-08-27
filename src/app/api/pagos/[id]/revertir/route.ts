@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { isSameOrigin, safeRouteError } from "@/lib/http/route-security";
-import { registrarPagoRecibo } from "@/lib/services/collection";
+import { revertirPagoRecibo } from "@/lib/services/collection";
 import { receiptPeriodSchema } from "@/lib/validation/collection";
 
 export async function POST(
@@ -20,13 +20,8 @@ export async function POST(
 
   try {
     const { id } = await params;
-    await registrarPagoRecibo(id, {
-      monto: String(formData.get("monto") ?? ""),
-      fechaPago: String(formData.get("fechaPago") ?? ""),
-      formaPago: String(formData.get("formaPago") ?? "") as "EFECTIVO" | "TRANSFERENCIA",
-      referencia: String(formData.get("referencia") ?? "").trim() || null,
-    });
-    target.searchParams.set("pago", "registrado");
+    await revertirPagoRecibo(id, { motivo: String(formData.get("motivo") ?? "") });
+    target.searchParams.set("pago", "revertido");
   } catch (error) {
     target.searchParams.set("error", safeRouteError(error));
   }

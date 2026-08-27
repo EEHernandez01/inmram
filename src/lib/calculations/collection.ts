@@ -76,6 +76,34 @@ export function calculateReceiptStatus({
     : ("PENDIENTE" as const);
 }
 
+export function calculateReceiptTotal({
+  rent,
+  servicesCharge = 0,
+}: {
+  rent: number;
+  servicesCharge?: number;
+}) {
+  return Math.round((rent + servicesCharge + Number.EPSILON) * 100) / 100;
+}
+
+export function calculateReceiptPaymentBalance({
+  total,
+  payments,
+}: {
+  total: number;
+  payments: readonly { amount: number; reversed?: boolean }[];
+}) {
+  const totalCents = Math.round(total * 100);
+  const paidCents = payments
+    .filter((payment) => !payment.reversed)
+    .reduce((sum, payment) => sum + Math.round(payment.amount * 100), 0);
+
+  return {
+    montoPagado: paidCents / 100,
+    saldoPendiente: Math.max(0, totalCents - paidCents) / 100,
+  };
+}
+
 export function calculateOverdueDays(currentDate: Date, dueDate: Date) {
   return Math.max(0, Math.floor((currentDate.getTime() - dueDate.getTime()) / DAY_MS));
 }
@@ -92,4 +120,3 @@ export function contractOverlapsPeriod({
   return startDate.getTime() <= receiptPeriodEnd(period).getTime()
     && endDate.getTime() >= period.getTime();
 }
-

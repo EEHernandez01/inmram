@@ -3,6 +3,7 @@ import "server-only";
 import { renderToBuffer } from "@react-pdf/renderer";
 
 import { getOwnerScope, READ_ROLES, requireSystemRole } from "@/lib/auth/authorization";
+import { calculateReceiptPaymentBalance, calculateReceiptTotal } from "@/lib/calculations/collection";
 import { prisma } from "@/lib/db/prisma";
 import { DomainError } from "@/lib/domain/errors";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -14,11 +15,13 @@ export async function generarReciboPdf(receiptId: string) {
   const { user, session } = await requireSystemRole(READ_ROLES);
   const ownerId = await getOwnerScope();
   const id = recordIdSchema.parse(receiptId);
-  const receipt = await prisma.recibo.findFirst({ where: { id, contrato: ownerId ? { unidad: { propiedad: { propietarioId: ownerId } } } : undefined }, include: { contrato: { include: { unidad: { include: { propiedad: true } } } } } });
+  const receipt = await prisma.recibo.findFirst({ where: { id, contrato: ownerId ? { unidad: { propiedad: { propietarioId: ownerId } } } : undefined }, include: { contrato: { include: { unidad: { include: { propiedad: true } } } }, pagos: { where: { anuladoEn: null } } } });
   if (!receipt) throw new DomainError("NOT_FOUND", "El recibo no existe.");
-  const total = Number(receipt.monto) + Number(receipt.cargoAgua ?? 0);
+  const servicesCharge = Number(receipt.cargoFijo);
+  const total = calculateReceiptTotal({ rent: Number(receipt.monto), servicesCharge });
+  const balance = calculateReceiptPaymentBalance({ total, payments: receipt.pagos.map((payment) => ({ amount: Number(payment.monto) })) });
   const issuer = user.perfil?.razonSocial || user.perfil?.nombreCompleto || session.user.name || "Administración de rentas";
-  const data = { issuer, folio: receipt.id.slice(0, 8).toUpperCase(), period: receipt.periodo.toISOString().slice(0, 7), tenant: receipt.contrato.arrendatario, property: receipt.contrato.unidad.propiedad.direccion, unit: receipt.contrato.unidad.identificador, rent: formatCurrency(receipt.monto), water: formatCurrency(receipt.cargoAgua ?? 0), total: formatCurrency(total), status: receipt.estatus === "PAGADO" ? "Pagado" : receipt.estatus === "VENCIDO" ? "Vencido" : "Pendiente", dueDate: formatDate(receipt.fechaVencimiento), paymentDate: receipt.fechaPago ? formatDate(receipt.fechaPago) : undefined, paymentMethod: receipt.formaPago === "EFECTIVO" ? "Efectivo" : receipt.formaPago === "TRANSFERENCIA" ? "Transferencia" : undefined };
+  const data = { issuer, folio: receipt.id.slice(0, 8).toUpperCase(), period: receipt.periodo.toISOString().slice(0, 7), tenant: receipt.contrato.arrendatario, property: receipt.contrato.unidad.propiedad.direccion, unit: receipt.contrato.unidad.identificador, rent: formatCurrency(receipt.monto), servicesCharge: servicesCharge > 0 ? formatCurrency(servicesCharge) : undefined, total: formatCurrency(total), paidAmount: balance.montoPagado > 0 ? formatCurrency(balance.montoPagado) : undefined, balance: formatCurrency(balance.saldoPendiente), status: receipt.estatus === "PAGADO" ? "Pagado" : receipt.estatus === "VENCIDO" ? "Vencido" : "Pendiente", dueDate: formatDate(receipt.fechaVencimiento), paymentDate: receipt.fechaPago ? formatDate(receipt.fechaPago) : undefined, paymentMethod: receipt.formaPago === "EFECTIVO" ? "Efectivo" : receipt.formaPago === "TRANSFERENCIA" ? "Transferencia" : undefined };
   return renderToBuffer(<ReceiptDocument data={data} />);
 }
 
@@ -64,7 +67,10 @@ export async function generarComprobantePagoPdf(receiptId: string) {
   const receipt = await prisma.recibo.findFirst({ where: { id, contrato: ownerId ? { unidad: { propiedad: { propietarioId: ownerId } } } : undefined }, include: { contrato: { include: { unidad: { include: { propiedad: true } } } } } });
   if (!receipt) throw new DomainError("NOT_FOUND", "El recibo no existe.");
   if (receipt.estatus !== "PAGADO" || !receipt.fechaPago) throw new DomainError("INVALID_STATE", "El comprobante solo se puede generar para un recibo pagado.");
-  const total = Number(receipt.monto) + Number(receipt.cargoAgua ?? 0) + Number(receipt.cargoFijo);
+  const total = calculateReceiptTotal({
+    rent: Number(receipt.monto),
+    servicesCharge: Number(receipt.cargoFijo),
+  });
   const issuer = user.perfil?.razonSocial || user.perfil?.nombreCompleto || session.user.name || "Administración de rentas";
   const property = receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim();
   const data = { issuer, folio: receipt.id.slice(0, 8).toUpperCase(), tenant: receipt.contrato.arrendatario, total: formatCurrency(total), totalInWords: amountInWords(total), property, unit: receipt.contrato.unidad.identificador, period: formatMonthYear(receipt.periodo), paymentDate: formatReceiptPlaceAndDate(receipt.fechaPago) };
