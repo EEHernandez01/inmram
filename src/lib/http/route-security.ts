@@ -10,6 +10,18 @@ export function isSameOrigin(request: Request) {
   return request.headers.get("origin") === url.origin;
 }
 
+export function sameOriginRedirectUrl(
+  request: Request,
+  destination: FormDataEntryValue | null,
+  fallback: string,
+) {
+  const requestUrl = new URL(request.url);
+  const candidate = new URL(String(destination ?? fallback), requestUrl);
+  return candidate.origin === requestUrl.origin
+    ? candidate
+    : new URL(fallback, requestUrl);
+}
+
 export function safeRouteError(error: unknown) {
   if (error instanceof z.ZodError) {
     return error.issues[0]?.message ?? "Revisa los datos capturados.";
@@ -31,4 +43,3 @@ export function validCronAuthorization(request: Request) {
     timingSafeEqual(expectedBuffer, providedBuffer)
   );
 }
-

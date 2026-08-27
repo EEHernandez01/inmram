@@ -15,7 +15,7 @@ const sourceSerif = Source_Serif_4({
 });
 
 export const metadata: Metadata = {
-  title: "Inmobiliaria Ramos",
+  title: "INMOBILIARIA RAMOS-ROSCH",
   description: "Control y automatización de cobranza de rentas",
 };
 

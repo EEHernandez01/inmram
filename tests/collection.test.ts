@@ -4,14 +4,16 @@ import test from "node:test";
 import {
   calculateOverdueDays,
   calculateReceiptDueDate,
+  calculateReceiptPaymentBalance,
   calculateReceiptStatus,
+  calculateReceiptTotal,
   contractOverlapsPeriod,
   currentReceiptPeriod,
   receiptPeriodFromValue,
 } from "../src/lib/calculations/collection.ts";
 import { calculateInflationFromIndexLevels, calculateRenewedRent, expirationAlertLevel } from "../src/lib/calculations/inflation.ts";
 import { calculatePortfolioProfitability, calculateUnitProfitability } from "../src/lib/calculations/profitability.ts";
-import { calculateWaterCharge, calculateWaterConsumption } from "../src/lib/calculations/water.ts";
+import { calculateWaterConsumption } from "../src/lib/calculations/water.ts";
 
 test("un pago el día 31 de febrero vence el 1 de marzo", () => {
   const period = receiptPeriodFromValue("2026-02");
@@ -27,6 +29,26 @@ test("un recibo vence solamente después de la fecha límite", () => {
 
 test("un recibo pagado conserva el estado pagado", () => {
   assert.equal(calculateReceiptStatus({ currentDate: new Date("2026-08-20T00:00:00.000Z"), dueDate: new Date("2026-08-05T00:00:00.000Z"), paid: true }), "PAGADO");
+});
+
+test("el total del recibo suma renta y servicios, incluido el agua, con precisión de centavos", () => {
+  assert.equal(
+    calculateReceiptTotal({ rent: 10_000.1, servicesCharge: 450.25 }),
+    10_450.35,
+  );
+});
+
+test("los pagos parciales y revertidos determinan el saldo del recibo", () => {
+  const balance = calculateReceiptPaymentBalance({
+    total: 10_450.35,
+    payments: [
+      { amount: 3_000 },
+      { amount: 1_000, reversed: true },
+      { amount: 2_450.35 },
+    ],
+  });
+  assert.equal(balance.montoPagado, 5_450.35);
+  assert.equal(balance.saldoPendiente, 5_000);
 });
 
 test("el periodo actual respeta America/Mexico_City", () => {
@@ -67,10 +89,9 @@ test("consolida rentabilidad del portafolio", () => {
   assert.equal(result.annualReturn, 10.8);
 });
 
-test("calcula consumo y cargo de agua", () => {
+test("calcula consumo de agua para control interno", () => {
   const consumption = calculateWaterConsumption(125.5, 132.75);
   assert.equal(consumption, 7.25);
-  assert.equal(calculateWaterCharge(100, 18.5, consumption), 234.13);
 });
 
 test("rechaza una lectura actual menor que la anterior", () => {

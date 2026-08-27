@@ -55,11 +55,9 @@ export function ReceiptMobileCard({
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-ink-secondary">Agua</dt>
+          <dt className="text-xs text-ink-secondary">Servicios (incluye agua)</dt>
           <dd className="mt-1 text-ink [font-variant-numeric:tabular-nums]">
-            {receipt.cargoAgua === null
-              ? "Sin cargo"
-              : formatCurrency(receipt.cargoAgua)}
+            {formatCurrency(receipt.cargoFijo)}
           </dd>
         </div>
         <div className="text-right">
@@ -68,11 +66,19 @@ export function ReceiptMobileCard({
             {formatCurrency(receipt.total)}
           </dd>
         </div>
+        <div>
+          <dt className="text-xs text-ink-secondary">Pagado</dt>
+          <dd className="mt-1 text-ink [font-variant-numeric:tabular-nums]">{formatCurrency(receipt.montoPagado)}</dd>
+        </div>
+        <div className="text-right">
+          <dt className="text-xs text-ink-secondary">Saldo</dt>
+          <dd className={receipt.saldoPendiente > 0 ? "mt-1 font-semibold text-danger [font-variant-numeric:tabular-nums]" : "mt-1 font-semibold text-success [font-variant-numeric:tabular-nums]"}>{formatCurrency(receipt.saldoPendiente)}</dd>
+        </div>
       </dl>
 
       {receipt.fechaPago ? (
         <p className="mt-4 text-xs text-ink-secondary">
-          Pagado el {formatDate(receipt.fechaPago)} ·{" "}
+          Liquidado el {formatDate(receipt.fechaPago)} ·{" "}
           {receipt.formaPago === "EFECTIVO" ? "Efectivo" : "Transferencia"}
         </p>
       ) : null}

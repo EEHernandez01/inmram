@@ -40,7 +40,7 @@ const styles = StyleSheet.create({
 
 export type ReceiptPdfData = {
   issuer: string; folio: string; period: string; tenant: string; property: string; unit: string;
-  rent: string; water: string; total: string; status: string; dueDate: string; paymentDate?: string; paymentMethod?: string;
+  rent: string; servicesCharge?: string; total: string; paidAmount?: string; balance?: string; status: string; dueDate: string; paymentDate?: string; paymentMethod?: string;
 };
 
 export function ReceiptDocument({ data }: { data: ReceiptPdfData }) {
@@ -68,7 +68,10 @@ export function ReceiptDocument({ data }: { data: ReceiptPdfData }) {
         <Text style={styles.sectionTitle}>Detalle de cargos</Text>
         <View style={styles.chargeHeader}><Text style={styles.chargeHeading}>Concepto</Text><Text style={styles.chargeHeading}>Importe</Text></View>
         <View style={styles.charge}><Text style={styles.chargeLabel}>Renta mensual</Text><Text style={styles.chargeValue}>{data.rent}</Text></View>
+        {data.servicesCharge ? <View style={styles.charge}><Text style={styles.chargeLabel}>Servicios mensuales (incluye agua)</Text><Text style={styles.chargeValue}>{data.servicesCharge}</Text></View> : null}
         <View style={styles.totalBox}><Text style={styles.totalLabel}>Total a pagar</Text><Text style={styles.totalValue}>{data.total}</Text></View>
+        {data.paidAmount ? <View style={styles.charge}><Text style={styles.chargeLabel}>Pagado a la fecha</Text><Text style={styles.chargeValue}>{data.paidAmount}</Text></View> : null}
+        {data.balance ? <View style={styles.charge}><Text style={styles.chargeLabel}>Saldo pendiente</Text><Text style={styles.chargeValue}>{data.balance}</Text></View> : null}
       </View>
       <Text style={styles.footer}>Este documento es un comprobante administrativo de control interno. No es CFDI ni comprobante fiscal.</Text>
     </Page>

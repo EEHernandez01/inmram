@@ -32,7 +32,7 @@ export function PaymentReceiptDocument({ data }: { data: PaymentReceiptPdfData }
       <Text style={styles.folio}>Folio {data.folio}</Text>
       <Text style={styles.date}>{data.paymentDate}</Text>
       <Text style={styles.paragraph}>
-        Recibí de <Text style={styles.emphasis}>{data.tenant}</Text> la cantidad de <Text style={styles.emphasis}>{data.total}</Text> ({data.totalInWords}) por concepto de renta correspondiente al periodo <Text style={styles.emphasis}>{data.period}</Text>, del inmueble ubicado en <Text style={styles.emphasis}>{data.property}</Text>, unidad <Text style={styles.emphasis}>{data.unit}</Text>.
+        Recibí de <Text style={styles.emphasis}>{data.tenant}</Text> la cantidad de <Text style={styles.emphasis}>{data.total}</Text> ({data.totalInWords}) por concepto de renta y servicios mensuales, incluido el agua, correspondientes al periodo <Text style={styles.emphasis}>{data.period}</Text>, del inmueble ubicado en <Text style={styles.emphasis}>{data.property}</Text>, unidad <Text style={styles.emphasis}>{data.unit}</Text>.
       </Text>
       <View style={styles.signature}>
         <Text style={styles.signatureLine}>{data.issuer}</Text>

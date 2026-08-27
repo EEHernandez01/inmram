@@ -93,7 +93,7 @@ export default async function CollectionPage({
         <Alert className="mt-6" variant="success">
           {query.pago === "registrado"
             ? "Pago registrado correctamente."
-            : "El pago fue corregido y el recibo se recalculó."}
+            : "El movimiento fue revertido y el saldo se recalculó."}
         </Alert>
       ) : null}
       {query.notificado ? (

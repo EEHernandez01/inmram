@@ -64,6 +64,8 @@ model UsuarioSistema {
   perfil         PerfilUsuario?
   propietario    Propietario?
   auditorias     RegistroAuditoria[]
+  pagosRegistrados PagoRecibo[] @relation("PagoRegistradoPor")
+  pagosAnulados    PagoRecibo[] @relation("PagoAnuladoPor")
   creadoEn       DateTime            @default(now())
   actualizadoEn  DateTime            @updatedAt
 }
@@ -235,6 +237,7 @@ model Recibo {
   cargoAgua        Decimal?     @db.Decimal(14, 2)
   cargoFijo        Decimal      @default(0) @db.Decimal(14, 2)
   contrato         Contrato     @relation(fields: [contratoId], references: [id], onDelete: Restrict)
+  pagos            PagoRecibo[]
   creadoEn         DateTime     @default(now())
   actualizadoEn    DateTime     @updatedAt
 
@@ -243,6 +246,27 @@ model Recibo {
   @@index([periodo])
   @@index([fechaVencimiento])
   @@index([estatus])
+}
+
+model PagoRecibo {
+  id                String          @id @default(uuid()) @db.Uuid
+  reciboId          String          @db.Uuid
+  monto             Decimal         @db.Decimal(14, 2)
+  fechaPago         DateTime        @db.Date
+  formaPago         FormaPago
+  referencia        String?
+  registradoPorId   String?         @db.Uuid
+  anuladoEn         DateTime?
+  anuladoPorId      String?         @db.Uuid
+  motivoAnulacion   String?
+  recibo            Recibo          @relation(fields: [reciboId], references: [id], onDelete: Restrict)
+  registradoPor     UsuarioSistema? @relation("PagoRegistradoPor", fields: [registradoPorId], references: [id], onDelete: SetNull)
+  anuladoPor        UsuarioSistema? @relation("PagoAnuladoPor", fields: [anuladoPorId], references: [id], onDelete: SetNull)
+  creadoEn          DateTime        @default(now())
+
+  @@index([reciboId, anuladoEn])
+  @@index([registradoPorId])
+  @@index([anuladoPorId])
 }
 
 model ArchivoExpediente {

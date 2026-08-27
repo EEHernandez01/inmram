@@ -15,11 +15,12 @@ export function ReceiptTable({ canWrite, paymentDate, periodValue, receipts }: {
         <div className="border-l-0 border-border xl:border-l xl:pl-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-secondary">Vencimiento</p><p className="mt-1 text-sm font-semibold text-ink">{formatDate(receipt.fechaVencimiento)}</p>
           {receipt.diasAtraso > 0 ? <p className="mt-1 text-sm font-semibold text-danger">{receipt.diasAtraso} {receipt.diasAtraso === 1 ? "día" : "días"} de atraso</p> : null}
-          {receipt.fechaPago ? <p className="mt-2 text-xs text-ink-secondary">Pagado el {formatDate(receipt.fechaPago)} · {receipt.formaPago === "EFECTIVO" ? "Efectivo" : "Transferencia"}</p> : null}
+          {receipt.fechaPago ? <p className="mt-2 text-xs text-ink-secondary">Liquidado el {formatDate(receipt.fechaPago)} · {receipt.formaPago === "EFECTIVO" ? "Efectivo" : "Transferencia"}</p> : null}
         </div>
         <div className="border-l-0 border-border text-left xl:border-l xl:pl-6 xl:text-right">
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-secondary">Total a cobrar</p><p className="mt-1 text-2xl font-bold tracking-tight text-ink [font-variant-numeric:tabular-nums]">{formatCurrency(receipt.total)}</p>
-          <p className="mt-1 text-xs text-ink-secondary [font-variant-numeric:tabular-nums]">Renta {formatCurrency(receipt.monto)}{receipt.cargoAgua !== null ? ` · Agua ${formatCurrency(receipt.cargoAgua)}` : ""}</p>
+          <p className="mt-1 text-xs text-ink-secondary [font-variant-numeric:tabular-nums]">Renta {formatCurrency(receipt.monto)} · Servicios {formatCurrency(receipt.cargoFijo)}</p>
+          <p className="mt-2 text-xs text-ink-secondary [font-variant-numeric:tabular-nums]">Pagado {formatCurrency(receipt.montoPagado)} · <span className={receipt.saldoPendiente > 0 ? "font-semibold text-danger" : "font-semibold text-success"}>Saldo {formatCurrency(receipt.saldoPendiente)}</span></p>
         </div>
       </div>
       <div className="mt-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-4 border-t border-border pt-5">
