@@ -1,14 +1,15 @@
 import { put } from "@vercel/blob";
 import { NextResponse } from "next/server";
+import sharp from "sharp";
 
 import { requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
 import { isSameOrigin } from "@/lib/http/route-security";
 
 const maxPhotoSize = 4 * 1024 * 1024;
+const maxPhotoWidth = 2_000;
 const allowedContentTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function filenameFor(file: File) {
-  const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
   const baseName = file.name
     .replace(/\.[^.]+$/, "")
     .normalize("NFKD")
@@ -16,7 +17,7 @@ function filenameFor(file: File) {
     .replace(/^-+|-+$/g, "")
     .slice(0, 80) || "foto";
 
-  return `propiedades/${crypto.randomUUID()}-${baseName}.${extension}`;
+  return `propiedades/${crypto.randomUUID()}-${baseName}.webp`;
 }
 
 export async function POST(request: Request) {
@@ -36,18 +37,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Cada foto debe ser JPG, PNG o WebP y pesar máximo 4 MB." }, { status: 400 });
     }
 
-    const blob = await put(filenameFor(photo), photo, {
+    const optimizedPhoto = await sharp(Buffer.from(await photo.arrayBuffer()))
+      .rotate()
+      .resize({ width: maxPhotoWidth, withoutEnlargement: true })
+      .webp({ quality: 80, effort: 4 })
+      .toBuffer();
+    const blob = await put(filenameFor(photo), optimizedPhoto, {
       access: "public",
       addRandomSuffix: true,
-      contentType: photo.type,
+      contentType: "image/webp",
     });
 
     return NextResponse.json({
       url: blob.url,
       pathname: blob.pathname,
-      nombre: photo.name,
-      mimeType: photo.type,
-      tamanoBytes: photo.size,
+      nombre: `${photo.name.replace(/\.[^.]+$/, "") || "foto"}.webp`,
+      mimeType: "image/webp",
+      tamanoBytes: optimizedPhoto.length,
     });
   } catch {
     return NextResponse.json({ error: "No fue posible cargar la foto." }, { status: 500 });
