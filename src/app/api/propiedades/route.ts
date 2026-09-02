@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 
-import { crearPropiedad } from "@/lib/services/foundation";
+import { requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
 import { prisma } from "@/lib/db/prisma";
+import { eliminarFotosBlob, propertyPhotoUploadsFromFormData } from "@/lib/property-photos";
+import { propiedadInputSchema } from "@/lib/validation/foundation";
 import { isSameOrigin, safeRouteError } from "@/lib/http/route-security";
 
 function formValue(form: FormData, key: string) {
@@ -12,14 +12,17 @@ function formValue(form: FormData, key: string) {
 }
 
 export async function POST(request: Request) {
-  const url = new URL(request.url);
+  const requestUrl = new URL(request.url);
+  let photos: ReturnType<typeof propertyPhotoUploadsFromFormData> = [];
+
   if (!isSameOrigin(request)) {
     return new NextResponse("Origen no permitido.", { status: 403 });
   }
 
   try {
+    await requireSystemRole(WRITE_ROLES);
     const form = await request.formData();
-    const property = await crearPropiedad({
+    const data = propiedadInputSchema.parse({
       propietarioId: String(form.get("propietarioId") ?? ""),
       marcaId: formValue(form, "marcaId"),
       direccion: String(form.get("direccion") ?? ""),
@@ -31,23 +34,36 @@ export async function POST(request: Request) {
       predialAnual: String(form.get("predialAnual") ?? ""),
       mantenimientoAnual: String(form.get("mantenimientoAnual") ?? ""),
     });
+    photos = propertyPhotoUploadsFromFormData(form);
 
-    const photos = form.getAll("fotos").filter((value): value is File => value instanceof File && value.size > 0);
-    if (photos.length > 8) throw new Error("Puedes cargar hasta 8 fotos.");
-    for (const [order, photo] of photos.entries()) {
-      if (!/^image\/(jpeg|png|webp)$/.test(photo.type) || photo.size > 5 * 1024 * 1024) throw new Error("Cada foto debe ser JPG, PNG o WebP y pesar máximo 5 MB.");
-      const extension = photo.name.split(".").pop()?.toLowerCase() || "jpg";
-      const filename = `${crypto.randomUUID()}.${extension}`;
-      const folder = path.join(process.cwd(), "public", "uploads", "propiedades", property.id);
-      await mkdir(folder, { recursive: true });
-      await writeFile(path.join(folder, filename), Buffer.from(await photo.arrayBuffer()));
-      const url = `/uploads/propiedades/${property.id}/${filename}`;
-      await prisma.archivoExpediente.create({ data: { propiedadId: property.id, tipo: "FOTO_PROPIEDAD", url, nombre: photo.name, mimeType: photo.type, tamanoBytes: photo.size, orden: order } });
+    const property = await prisma.$transaction(async (transaction) => {
+      const created = await transaction.propiedad.create({ data });
+
+      if (photos.length > 0) {
+        await transaction.archivoExpediente.createMany({
+          data: photos.map((photo, order) => ({
+            propiedadId: created.id,
+            tipo: "FOTO_PROPIEDAD" as const,
+            url: photo.url,
+            nombre: photo.nombre,
+            mimeType: photo.mimeType,
+            tamanoBytes: photo.tamanoBytes,
+            orden: order,
+          })),
+        });
+      }
+
+      return created;
+    });
+
+    const target = new URL(`/propiedades/${property.id}`, requestUrl);
+    if (form.get("fotoCargaFallida") === "1") {
+      target.searchParams.set("aviso", "La propiedad se guardó, pero una o más fotos no pudieron cargarse. Inténtalo nuevamente desde Editar propiedad.");
     }
-
-    return NextResponse.redirect(new URL(`/propiedades/${property.id}`, url), 303);
+    return NextResponse.redirect(target, 303);
   } catch (error) {
-    const target = new URL("/propiedades/nueva", url);
+    await eliminarFotosBlob(photos);
+    const target = new URL("/propiedades/nueva", requestUrl);
     target.searchParams.set("error", safeRouteError(error));
     return NextResponse.redirect(target, 303);
   }

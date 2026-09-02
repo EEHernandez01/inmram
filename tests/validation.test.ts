@@ -8,6 +8,7 @@ import {
 } from "../src/lib/validation/water.ts";
 import { propertyReportFilterSchema } from "../src/lib/validation/reports.ts";
 import { paymentInputSchema, paymentReversalInputSchema } from "../src/lib/validation/collection.ts";
+import { propertyPhotoUploadSchema } from "../src/lib/validation/property-photos.ts";
 import { canManageOperations, canViewReports } from "../src/lib/auth/role-policy.ts";
 import { RolUsuario } from "../src/generated/prisma/enums.ts";
 
@@ -96,4 +97,24 @@ test("valida pagos parciales, referencias y motivos de reversión", () => {
   assert.equal(paymentReversalInputSchema.safeParse({ motivo: "Pago duplicado" }).success, true);
   assert.equal(paymentInputSchema.safeParse({ monto: "0", fechaPago: "2026-08-15", formaPago: "EFECTIVO" }).success, false);
   assert.equal(paymentReversalInputSchema.safeParse({ motivo: "No" }).success, false);
+});
+
+test("acepta únicamente referencias de fotos públicas de Vercel Blob", () => {
+  const photo = {
+    url: "https://store.public.blob.vercel-storage.com/propiedades/foto.jpg",
+    pathname: "propiedades/foto.jpg",
+    nombre: "foto.jpg",
+    mimeType: "image/jpeg",
+    tamanoBytes: 1024,
+  };
+
+  assert.equal(propertyPhotoUploadSchema.safeParse(photo).success, true);
+  assert.equal(
+    propertyPhotoUploadSchema.safeParse({ ...photo, url: "https://example.com/foto.jpg" }).success,
+    false,
+  );
+  assert.equal(
+    propertyPhotoUploadSchema.safeParse({ ...photo, tamanoBytes: 5 * 1024 * 1024 + 1 }).success,
+    false,
+  );
 });

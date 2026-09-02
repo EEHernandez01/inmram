@@ -2,8 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { z } from "zod";
 
 import { EstadoContrato, TipoUnidad } from "@/generated/prisma/enums";
@@ -20,7 +18,11 @@ import {
   eliminarUnidad,
   vencerContrato,
 } from "@/lib/services/foundation";
-import { prisma } from "@/lib/db/prisma";
+import {
+  eliminarFotosBlob,
+  guardarFotosBlobDePropiedad,
+  propertyPhotoUploadsFromFormData,
+} from "@/lib/property-photos";
 
 export type FoundationActionState = { error?: string };
 
@@ -105,51 +107,19 @@ export async function updatePropertyAction(
 }
 
 export async function updatePropertyFormAction(propertyId: string, formData: FormData) {
+  let photos;
   try {
+    photos = propertyPhotoUploadsFromFormData(formData);
     await actualizarPropiedad(propertyId, propertyInput(formData));
-    await guardarFotosDePropiedad(propertyId, formData);
+    await guardarFotosBlobDePropiedad(propertyId, photos);
   } catch (error) {
+    if (photos) await eliminarFotosBlob(photos);
     throw new Error(errorState(error).error);
   }
 
   revalidatePath("/propiedades");
   revalidatePath(`/propiedades/${propertyId}`);
   redirect(`/propiedades/${propertyId}`);
-}
-
-async function guardarFotosDePropiedad(propertyId: string, formData: FormData) {
-  const photos = formData.getAll("fotos").filter((value): value is File => value instanceof File && value.size > 0);
-  if (photos.length === 0) return;
-
-  const existingCount = await prisma.archivoExpediente.count({
-    where: { propiedadId: propertyId, tipo: "FOTO_PROPIEDAD" },
-  });
-  if (existingCount + photos.length > 8) {
-    throw new DomainError("PHOTO_LIMIT", "Puedes tener hasta 8 fotos por propiedad.");
-  }
-
-  const folder = path.join(process.cwd(), "public", "uploads", "propiedades", propertyId);
-  await mkdir(folder, { recursive: true });
-
-  for (const [index, photo] of photos.entries()) {
-    if (!/^image\/(jpeg|png|webp)$/.test(photo.type) || photo.size > 5 * 1024 * 1024) {
-      throw new DomainError("INVALID_PHOTO", "Cada foto debe ser JPG, PNG o WebP y pesar máximo 5 MB.");
-    }
-    const extension = photo.type === "image/png" ? "png" : photo.type === "image/webp" ? "webp" : "jpg";
-    const filename = `${crypto.randomUUID()}.${extension}`;
-    await writeFile(path.join(folder, filename), Buffer.from(await photo.arrayBuffer()));
-    await prisma.archivoExpediente.create({
-      data: {
-        propiedadId: propertyId,
-        tipo: "FOTO_PROPIEDAD",
-        url: `/uploads/propiedades/${propertyId}/${filename}`,
-        nombre: photo.name,
-        mimeType: photo.type,
-        tamanoBytes: photo.size,
-        orden: existingCount + index,
-      },
-    });
-  }
 }
 
 export async function deletePropertyAction(propertyId: string) {
