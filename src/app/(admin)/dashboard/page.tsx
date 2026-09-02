@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { getSystemUser, WRITE_ROLES } from "@/lib/auth/authorization";
 import {
@@ -12,8 +13,6 @@ import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import { listarCobranzaMensual } from "@/lib/services/collection";
 import { listarProximosVencimientosContrato } from "@/lib/services/dashboard";
 import { obtenerReporteRentabilidad } from "@/lib/services/reports";
-
-import { signOut } from "./actions";
 
 const unitTypeLabels = {
   ACCESORIA: "Accesoria",
@@ -92,14 +91,7 @@ export default async function DashboardPage() {
     <>
       <PageHeader
         action={
-          <form action={signOut}>
-            <button
-              className="rounded border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-ink hover:bg-bg"
-              type="submit"
-            >
-              Cerrar sesión
-            </button>
-          </form>
+          <SignOutButton />
         }
         description="Ve el avance de cobranza y las tareas que requieren atención en tu portafolio."
         eyebrow="Inicio"
