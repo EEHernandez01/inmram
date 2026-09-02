@@ -1,41 +1,55 @@
-import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
+import { put } from "@vercel/blob";
 import { NextResponse } from "next/server";
 
 import { requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
+import { isSameOrigin } from "@/lib/http/route-security";
 
-const maxPhotoSize = 5 * 1024 * 1024;
-const allowedContentTypes = ["image/jpeg", "image/png", "image/webp"];
+const maxPhotoSize = 4 * 1024 * 1024;
+const allowedContentTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+function filenameFor(file: File) {
+  const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+  const baseName = file.name
+    .replace(/\.[^.]+$/, "")
+    .normalize("NFKD")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "foto";
+
+  return `propiedades/${crypto.randomUUID()}-${baseName}.${extension}`;
+}
 
 export async function POST(request: Request) {
-  try {
-    const body = (await request.json()) as HandleUploadBody;
+  if (!isSameOrigin(request)) {
+    return new NextResponse("Origen no permitido.", { status: 403 });
+  }
 
-    if (body.type === "blob.generate-client-token") {
-      await requireSystemRole(WRITE_ROLES);
+  try {
+    await requireSystemRole(WRITE_ROLES);
+    const form = await request.formData();
+    const photo = form.get("foto");
+
+    if (!(photo instanceof File) || photo.size === 0) {
+      return NextResponse.json({ error: "Selecciona una foto válida." }, { status: 400 });
+    }
+    if (!allowedContentTypes.has(photo.type) || photo.size > maxPhotoSize) {
+      return NextResponse.json({ error: "Cada foto debe ser JPG, PNG o WebP y pesar máximo 4 MB." }, { status: 400 });
     }
 
-    const jsonResponse = await handleUpload({
-      body,
-      request,
-      onBeforeGenerateToken: async (pathname) => {
-        if (!/^propiedades\/[a-zA-Z0-9_./-]+$/.test(pathname)) {
-          throw new Error("La ruta de carga no es válida.");
-        }
-
-        return {
-          addRandomSuffix: true,
-          allowedContentTypes,
-          maximumSizeInBytes: maxPhotoSize,
-        };
-      },
-      onUploadCompleted: async () => {},
+    const blob = await put(filenameFor(photo), photo, {
+      access: "public",
+      addRandomSuffix: true,
+      contentType: photo.type,
     });
 
-    return NextResponse.json(jsonResponse);
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "No fue posible preparar la carga de fotos." },
-      { status: 400 },
-    );
+    return NextResponse.json({
+      url: blob.url,
+      pathname: blob.pathname,
+      nombre: photo.name,
+      mimeType: photo.type,
+      tamanoBytes: photo.size,
+    });
+  } catch {
+    return NextResponse.json({ error: "No fue posible cargar la foto." }, { status: 500 });
   }
 }

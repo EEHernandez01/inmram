@@ -8,7 +8,7 @@ export const propertyPhotoUploadSchema = z
     pathname: z.string().trim().regex(/^propiedades\/[a-zA-Z0-9_./-]+$/, "La ruta de la foto no es válida."),
     nombre: z.string().trim().min(1).max(255),
     mimeType: z.enum(propertyPhotoMimeTypes),
-    tamanoBytes: z.number().int().positive().max(5 * 1024 * 1024),
+    tamanoBytes: z.number().int().positive().max(4 * 1024 * 1024),
   })
   .superRefine((photo, context) => {
     const url = new URL(photo.url);

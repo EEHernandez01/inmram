@@ -1,6 +1,5 @@
 "use client";
 
-import { upload } from "@vercel/blob/client";
 import { useRef, useState, type FormEvent } from "react";
 
 import { LocationPicker } from "@/components/forms/location-picker";
@@ -10,7 +9,7 @@ import { Field, Input } from "@/components/ui/form-controls";
 import { FormStatus } from "@/components/ui/form-status";
 
 const defaultMoneyValue = "0.00";
-const maxPhotoSize = 5 * 1024 * 1024;
+const maxPhotoSize = 4 * 1024 * 1024;
 const allowedPhotoTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 type PropertyDefaults = {
@@ -26,6 +25,17 @@ type PropertyDefaults = {
 };
 
 type ExistingPhoto = { id: string; nombre: string; url: string };
+type UploadedPhoto = { url: string; pathname: string; nombre: string; mimeType: string; tamanoBytes: number };
+
+async function uploadPropertyPhoto(file: File): Promise<UploadedPhoto> {
+  const body = new FormData();
+  body.append("foto", file);
+  const response = await fetch("/api/uploads/propiedades", { method: "POST", body });
+  const payload = await response.json().catch(() => ({})) as UploadedPhoto & { error?: string };
+
+  if (!response.ok) throw new Error(payload.error ?? "No fue posible cargar la foto.");
+  return payload;
+}
 
 export function PropertyForm({ action = "/api/propiedades", defaults, existingPhotos, placesEnabled, submitLabel, owners }: {
   action?: string | ((formData: FormData) => Promise<void>);
@@ -61,22 +71,14 @@ export function PropertyForm({ action = "/api/propiedades", defaults, existingPh
       return;
     }
     if (files.some((file) => !allowedPhotoTypes.has(file.type) || file.size > maxPhotoSize)) {
-      setUploadError("Cada foto debe ser JPG, PNG o WebP y pesar máximo 5 MB.");
+      setUploadError("Cada foto debe ser JPG, PNG o WebP y pesar máximo 4 MB.");
       return;
     }
 
     setIsUploading(true);
     try {
       form.querySelectorAll('input[name="fotosBlob"], input[name="fotoCargaFallida"]').forEach((input) => input.remove());
-      const results = await Promise.allSettled(files.map(async (file) => {
-        const blob = await upload(`propiedades/${crypto.randomUUID()}-${file.name}`, file, {
-          access: "public",
-          contentType: file.type,
-          handleUploadUrl: "/api/uploads/propiedades",
-          multipart: true,
-        });
-        return { url: blob.url, pathname: blob.pathname, nombre: file.name, mimeType: file.type, tamanoBytes: file.size };
-      }));
+      const results = await Promise.allSettled(files.map(uploadPropertyPhoto));
 
       for (const result of results) {
         if (result.status !== "fulfilled") continue;

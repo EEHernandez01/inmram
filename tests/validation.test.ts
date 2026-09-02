@@ -114,7 +114,7 @@ test("acepta únicamente referencias de fotos públicas de Vercel Blob", () => {
     false,
   );
   assert.equal(
-    propertyPhotoUploadSchema.safeParse({ ...photo, tamanoBytes: 5 * 1024 * 1024 + 1 }).success,
+    propertyPhotoUploadSchema.safeParse({ ...photo, tamanoBytes: 4 * 1024 * 1024 + 1 }).success,
     false,
   );
 });
