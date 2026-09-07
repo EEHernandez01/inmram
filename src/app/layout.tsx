@@ -22,7 +22,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="es" className={`${inter.variable} ${sourceSerif.variable}`}>
-      <body className="min-h-screen bg-bg font-sans text-ink antialiased">
+      <body
+        className="min-h-screen bg-bg font-sans text-ink antialiased"
+        suppressHydrationWarning
+      >
         {children}
         <Analytics />
       </body>

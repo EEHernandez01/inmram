@@ -1,13 +1,18 @@
 import "server-only";
 
+import { renderToBuffer, type DocumentProps } from "@react-pdf/renderer";
+import { createElement, type ReactElement } from "react";
+
 import { EstadoContrato } from "@/generated/prisma/enums";
-import { getSystemUser, requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
-import { calculateInflationFromIndexLevels, calculateRenewedRent, contractExpirationAlertDays, expirationAlertLevel } from "@/lib/calculations/inflation";
+import { getOwnerScope, getSystemUser, READ_ROLES, requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
+import { calculateInflationFromIndexLevels, calculateRenewedRent, contractExpirationAlertDays, expirationAlertLevel, isRenewalProposalWindow, renewalTermDates } from "@/lib/calculations/inflation";
 import { currentCollectionDate } from "@/lib/calculations/collection";
 import { prisma } from "@/lib/db/prisma";
 import { DomainError } from "@/lib/domain/errors";
 import { recordIdSchema } from "@/lib/validation/foundation";
 import { registrarAuditoria } from "@/lib/services/audit";
+import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
+import { RenewalProposalDocument } from "@/lib/pdf/renewal-proposal-document";
 import { inflationDate, inflationIndexInputSchema, inflationMonthDate, inflationYearSchema, renewalInputSchema } from "@/lib/validation/inflation";
 
 export async function guardarIndiceInflacion(input: unknown) {
@@ -59,6 +64,107 @@ export async function contarAlertasRenovacionSistema() {
   const hoy = currentCollectionDate();
   const limite = new Date(hoy); limite.setUTCDate(limite.getUTCDate() + 90);
   return prisma.contrato.count({ where: { estado: EstadoContrato.ACTIVO, fechaFin: { gte: hoy, lte: limite }, unidad: { propiedad: { archivadaEn: null } } } });
+}
+
+type ProposalContract = {
+  fechaFin: Date;
+  rentaMensualBase: { toString(): string };
+  diaPago: number;
+};
+
+function previousYearMonth(value: Date) {
+  return new Date(Date.UTC(value.getUTCFullYear() - 1, value.getUTCMonth(), 1));
+}
+
+async function latestAnnualInpc() {
+  const levels = await prisma.indiceInflacion.findMany({ where: { indice: "INPC" }, orderBy: { mes: "desc" }, take: 48 });
+  const byMonth = new Map(levels.map((level) => [level.mes.getTime(), level]));
+  for (const final of levels) {
+    const base = byMonth.get(previousYearMonth(final.mes).getTime());
+    if (base) return { base, final, inflation: calculateInflationFromIndexLevels(Number(base.valor), Number(final.valor)) };
+  }
+  return null;
+}
+
+function proposalCalculation(contract: ProposalContract, levels: Awaited<ReturnType<typeof latestAnnualInpc>>) {
+  if (!levels) return null;
+  const rent = calculateRenewedRent(Number(contract.rentaMensualBase), levels.inflation);
+  const term = renewalTermDates(contract.fechaFin);
+  return { ...levels, rent, ...term };
+}
+
+function amountInWords(value: number) {
+  const units = ["cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve"];
+  const teens = ["diez", "once", "doce", "trece", "catorce", "quince", "dieciseis", "diecisiete", "dieciocho", "diecinueve"];
+  const tens = ["", "", "veinte", "treinta", "cuarenta", "cincuenta", "sesenta", "setenta", "ochenta", "noventa"];
+  const hundreds = ["", "ciento", "doscientos", "trescientos", "cuatrocientos", "quinientos", "seiscientos", "setecientos", "ochocientos", "novecientos"];
+  const belowThousand = (amount: number): string => {
+    if (amount === 0) return "";
+    if (amount === 100) return "cien";
+    const hundred = Math.floor(amount / 100);
+    const rest = amount % 100;
+    if (rest < 10) return [hundreds[hundred], units[rest]].filter(Boolean).join(" ");
+    if (rest < 20) return [hundreds[hundred], teens[rest - 10]].filter(Boolean).join(" ");
+    if (rest < 30) return [hundreds[hundred], rest === 20 ? "veinte" : `veinti${units[rest - 20]}`].filter(Boolean).join(" ");
+    return [hundreds[hundred], tens[Math.floor(rest / 10)], rest % 10 ? `y ${units[rest % 10]}` : ""].filter(Boolean).join(" ");
+  };
+  const pesos = Math.floor(value);
+  const thousands = Math.floor(pesos / 1000);
+  const remainder = pesos % 1000;
+  const words = thousands ? `${thousands === 1 ? "mil" : `${belowThousand(thousands)} mil`}${remainder ? ` ${belowThousand(remainder)}` : ""}` : belowThousand(remainder) || "cero";
+  return `${words.toUpperCase()} PESOS ${String(Math.round((value - pesos) * 100)).padStart(2, "0")}/100 M.N.`;
+}
+
+export async function prepararPropuestasRenovacionSistema(now = currentCollectionDate()) {
+  const nextMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  const nextMonthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 2, 0));
+  const [contracts, levels] = await Promise.all([
+    prisma.contrato.findMany({ where: { estado: EstadoContrato.ACTIVO, renovacionNotificadaEn: null, fechaFin: { gte: nextMonthStart, lte: nextMonthEnd }, unidad: { propiedad: { archivadaEn: null } } }, select: { id: true, fechaFin: true, rentaMensualBase: true, diaPago: true } }),
+    latestAnnualInpc(),
+  ]);
+  if (!levels) return { preparados: 0, pendientesInpc: contracts.length };
+  const eligible = contracts.filter((contract) => isRenewalProposalWindow(contract.fechaFin, now) && proposalCalculation(contract, levels));
+  if (eligible.length) await prisma.contrato.updateMany({ where: { id: { in: eligible.map((contract) => contract.id) }, renovacionNotificadaEn: null }, data: { renovacionNotificadaEn: now } });
+  return { preparados: eligible.length, pendientesInpc: 0 };
+}
+
+export async function obtenerEstadoPropuestaRenovacion(contratoId: string) {
+  await requireSystemRole(READ_ROLES);
+  const id = recordIdSchema.parse(contratoId);
+  const ownerId = await getOwnerScope();
+  const contract = await prisma.contrato.findFirst({ where: { id, unidad: ownerId ? { propiedad: { propietarioId: ownerId } } : undefined }, select: { estado: true, fechaFin: true, renovacionNotificadaEn: true, rentaMensualBase: true, diaPago: true } });
+  if (!contract || contract.estado !== EstadoContrato.ACTIVO || !isRenewalProposalWindow(contract.fechaFin, currentCollectionDate())) return { estado: "FUERA_DE_VENTANA" as const };
+  const calculation = proposalCalculation(contract, await latestAnnualInpc());
+  if (!calculation) return { estado: "PENDIENTE_INPC" as const };
+  return { estado: contract.renovacionNotificadaEn ? "LISTA" as const : "PENDIENTE_PREPARACION" as const, preparadaEn: contract.renovacionNotificadaEn, ...calculation };
+}
+
+export async function generarPropuestaRenovacionPdf(contratoId: string) {
+  await requireSystemRole(READ_ROLES);
+  const id = recordIdSchema.parse(contratoId);
+  const ownerId = await getOwnerScope();
+  const contract = await prisma.contrato.findFirst({ where: { id, unidad: ownerId ? { propiedad: { propietarioId: ownerId } } : undefined }, include: { unidad: { include: { propiedad: true } } } });
+  if (!contract) throw new DomainError("NOT_FOUND", "El contrato no existe.");
+  const state = await obtenerEstadoPropuestaRenovacion(id);
+  if (state.estado === "FUERA_DE_VENTANA") throw new DomainError("PROPOSAL_UNAVAILABLE", "La propuesta solo está disponible durante el mes previo al vencimiento.");
+  if (state.estado === "PENDIENTE_INPC") throw new DomainError("MISSING_INDEX", "Faltan niveles INPC para preparar la propuesta.");
+  if (state.estado === "PENDIENTE_PREPARACION") throw new DomainError("PROPOSAL_PENDING", "La propuesta aún no ha sido preparada por la tarea diaria.");
+  const paymentNote = contract.diaPago !== state.start.getUTCDate() ? `Conservaremos el día ${contract.diaPago} como fecha habitual de pago.` : undefined;
+  return renderToBuffer(createElement(RenewalProposalDocument, {
+    data: {
+      tenant: contract.arrendatario,
+      property: contract.unidad.propiedad.direccion,
+      unit: contract.unidad.identificador,
+      preparedDate: formatDate(state.preparadaEn ?? new Date()),
+      currentRent: formatCurrency(contract.rentaMensualBase),
+      inflation: formatPercent(state.inflation * 100),
+      proposedRent: formatCurrency(state.rent),
+      proposedRentWords: amountInWords(state.rent),
+      renewalStart: formatDate(state.start),
+      renewalEnd: formatDate(state.end),
+      paymentNote,
+    },
+  }) as unknown as ReactElement<DocumentProps>);
 }
 
 export async function renovarContrato(contratoId: string, input: unknown) {

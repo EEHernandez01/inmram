@@ -22,3 +22,18 @@ export function expirationAlertLevel(days: number) {
   if (days <= 30) return "CRITICO" as const;
   return "PROXIMO" as const;
 }
+
+export function isRenewalProposalWindow(contractEnd: Date, currentDate: Date) {
+  const proposalMonth = new Date(Date.UTC(contractEnd.getUTCFullYear(), contractEnd.getUTCMonth() - 1, 1));
+  const currentMonth = new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth(), 1));
+  return proposalMonth.getTime() === currentMonth.getTime() && currentDate.getTime() <= contractEnd.getTime();
+}
+
+export function renewalTermDates(contractEnd: Date) {
+  const start = new Date(contractEnd);
+  start.setUTCDate(start.getUTCDate() + 1);
+  const end = new Date(start);
+  end.setUTCFullYear(end.getUTCFullYear() + 1);
+  end.setUTCDate(end.getUTCDate() - 1);
+  return { start, end };
+}

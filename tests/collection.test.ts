@@ -11,7 +11,7 @@ import {
   currentReceiptPeriod,
   receiptPeriodFromValue,
 } from "../src/lib/calculations/collection.ts";
-import { calculateInflationFromIndexLevels, calculateRenewedRent, expirationAlertLevel } from "../src/lib/calculations/inflation.ts";
+import { calculateInflationFromIndexLevels, calculateRenewedRent, expirationAlertLevel, isRenewalProposalWindow, renewalTermDates } from "../src/lib/calculations/inflation.ts";
 import { calculatePortfolioProfitability, calculateUnitProfitability } from "../src/lib/calculations/profitability.ts";
 import { calculateWaterConsumption } from "../src/lib/calculations/water.ts";
 
@@ -70,6 +70,20 @@ test("clasifica alertas de renovación a 90 y 30 días", () => {
   assert.equal(expirationAlertLevel(90), "PROXIMO");
   assert.equal(expirationAlertLevel(30), "CRITICO");
   assert.equal(expirationAlertLevel(91), null);
+});
+
+test("habilita la propuesta durante el mes calendario previo al vencimiento", () => {
+  const end = new Date("2027-08-19T00:00:00.000Z");
+  assert.equal(isRenewalProposalWindow(end, new Date("2027-07-01T00:00:00.000Z")), true);
+  assert.equal(isRenewalProposalWindow(end, new Date("2027-07-31T00:00:00.000Z")), true);
+  assert.equal(isRenewalProposalWindow(end, new Date("2027-06-30T00:00:00.000Z")), false);
+  assert.equal(isRenewalProposalWindow(end, new Date("2027-08-01T00:00:00.000Z")), false);
+});
+
+test("calcula una vigencia de renovación de doce meses desde el día siguiente", () => {
+  const term = renewalTermDates(new Date("2027-08-19T00:00:00.000Z"));
+  assert.equal(term.start.toISOString(), "2027-08-20T00:00:00.000Z");
+  assert.equal(term.end.toISOString(), "2028-08-19T00:00:00.000Z");
 });
 
 test("prorratea predial, mantenimiento y valor comercial por metros cuadrados", () => {
