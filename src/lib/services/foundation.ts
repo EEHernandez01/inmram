@@ -12,6 +12,7 @@ import {
 import { prisma } from "@/lib/db/prisma";
 import { DomainError } from "@/lib/domain/errors";
 import { registrarAuditoria } from "@/lib/services/audit";
+import { eliminarFotosBlob } from "@/lib/property-photos";
 import {
   calculateReceiptDueDate,
   calculateReceiptStatus,
@@ -174,6 +175,51 @@ export async function archivarPropiedad(propiedadId: string) {
     });
     return archived;
   });
+}
+
+export async function eliminarPropiedadArchivadaPermanentemente(propiedadId: string) {
+  const { user } = await requireSystemRole(WRITE_ROLES);
+  const id = recordIdSchema.parse(propiedadId);
+  const property = await prisma.propiedad.findUnique({
+    where: { id },
+    select: {
+      direccion: true,
+      archivadaEn: true,
+      archivos: { select: { url: true } },
+      unidades: { select: { contratos: { select: { archivos: { select: { url: true } } } } } },
+    },
+  });
+
+  if (!property) throw new DomainError("NOT_FOUND", "La propiedad no existe.");
+  const archivedAt = property.archivadaEn;
+  if (!archivedAt) throw new DomainError("PROPERTY_NOT_ARCHIVED", "Primero archiva la propiedad antes de eliminarla permanentemente.");
+
+  const files = [
+    ...property.archivos,
+    ...property.unidades.flatMap((unit) => unit.contratos.flatMap((contract) => contract.archivos)),
+  ];
+
+  await prisma.$transaction(async (tx) => {
+    const contractScope = { unidad: { propiedadId: id } };
+    await tx.pagoRecibo.deleteMany({ where: { recibo: { contrato: contractScope } } });
+    await tx.recibo.deleteMany({ where: { contrato: contractScope } });
+    await tx.ajusteInflacion.deleteMany({ where: { contrato: contractScope } });
+    await tx.lecturaAgua.deleteMany({ where: { medidorAgua: { unidad: { propiedadId: id } } } });
+    await tx.medidorAgua.deleteMany({ where: { unidad: { propiedadId: id } } });
+    await tx.contrato.deleteMany({ where: contractScope });
+    await tx.unidad.deleteMany({ where: { propiedadId: id } });
+    await tx.propiedad.delete({ where: { id } });
+    await registrarAuditoria(tx, {
+      usuarioSistemaId: user.id,
+      accion: "ELIMINAR_PERMANENTE",
+      entidad: "Propiedad",
+      entidadId: id,
+      antes: { direccion: property.direccion, archivadaEn: archivedAt.toISOString() },
+      despues: { eliminadoPermanentemente: true },
+    });
+  });
+
+  await eliminarFotosBlob(files);
 }
 
 export async function listarUnidades(propiedadId: string) {
