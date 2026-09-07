@@ -33,6 +33,7 @@ export function ReceiptMobileCard({
         </div>
         <ReceiptBadge status={receipt.estatus} />
       </div>
+      {receipt.contrato.unidad.propiedad.archivadaEn ? <span className="mt-2 inline-flex rounded-full bg-warning-soft px-2.5 py-1 text-xs font-semibold text-warning">Propiedad archivada</span> : null}
 
       <p className="mt-4 text-sm font-semibold text-ink">
         {receipt.contrato.arrendatario}
@@ -85,12 +86,12 @@ export function ReceiptMobileCard({
 
       <div className="mt-5 border-t border-border pt-4">
         <ReceiptDocuments
-          canWrite={canWrite}
+          canWrite={canWrite && !receipt.contrato.unidad.propiedad.archivadaEn}
           periodValue={periodValue}
           receipt={receipt}
         />
         <ReceiptAction
-          canWrite={canWrite}
+          canWrite={canWrite && !receipt.contrato.unidad.propiedad.archivadaEn}
           mobile
           paymentDate={paymentDate}
           periodValue={periodValue}

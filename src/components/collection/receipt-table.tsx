@@ -9,7 +9,7 @@ export function ReceiptTable({ canWrite, paymentDate, periodValue, receipts }: {
     {receipts.map((receipt) => <article className="rounded-card border border-border bg-surface p-6 shadow-sm transition-shadow hover:shadow-md" key={receipt.id}>
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(190px,.75fr)_minmax(180px,.6fr)] xl:items-start">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-3"><p className="text-base font-bold text-ink">{receipt.contrato.arrendatario}</p><ReceiptBadge status={receipt.estatus} /></div>
+          <div className="flex flex-wrap items-center gap-3"><p className="text-base font-bold text-ink">{receipt.contrato.arrendatario}</p><ReceiptBadge status={receipt.estatus} />{receipt.contrato.unidad.propiedad.archivadaEn ? <span className="rounded-full bg-warning-soft px-2.5 py-1 text-xs font-semibold text-warning">Archivada</span> : null}</div>
           <Link className="mt-2 inline-block text-sm font-semibold text-brand hover:text-brand-hover" href={`/propiedades/${receipt.contrato.unidad.propiedadId}/unidades/${receipt.contrato.unidadId}`}>{receipt.contrato.unidad.propiedad.direccion} · Unidad {receipt.contrato.unidad.identificador}</Link>
         </div>
         <div className="border-l-0 border-border xl:border-l xl:pl-6">
@@ -24,8 +24,8 @@ export function ReceiptTable({ canWrite, paymentDate, periodValue, receipts }: {
         </div>
       </div>
       <div className="mt-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-4 border-t border-border pt-5">
-        <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-secondary">Documentos y seguimiento</p><ReceiptDocuments canWrite={canWrite} periodValue={periodValue} receipt={receipt} /></div>
-        <div className="min-w-[330px]"><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-secondary">Registrar movimiento</p><ReceiptAction canWrite={canWrite} paymentDate={paymentDate} periodValue={periodValue} receipt={receipt} /></div>
+        <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-secondary">Documentos y seguimiento</p><ReceiptDocuments canWrite={canWrite && !receipt.contrato.unidad.propiedad.archivadaEn} periodValue={periodValue} receipt={receipt} /></div>
+        <div className="min-w-[330px]"><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-secondary">Registrar movimiento</p><ReceiptAction canWrite={canWrite && !receipt.contrato.unidad.propiedad.archivadaEn} paymentDate={paymentDate} periodValue={periodValue} receipt={receipt} /></div>
       </div>
     </article>)}
   </div>;

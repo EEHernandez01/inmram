@@ -69,6 +69,7 @@ export async function sincronizarCobranzaSistema(now = new Date()) {
       estado: EstadoContrato.ACTIVO,
       fechaInicio: { lte: receiptPeriodEnd(period) },
       fechaFin: { gte: period },
+      unidad: { propiedad: { archivadaEn: null } },
     },
     select: {
       id: true,
@@ -102,6 +103,7 @@ export async function sincronizarCobranzaSistema(now = new Date()) {
     where: {
       estatus: EstadoRecibo.PENDIENTE,
       fechaVencimiento: { lt: currentDate },
+      contrato: { unidad: { propiedad: { archivadaEn: null } } },
     },
     data: { estatus: EstadoRecibo.VENCIDO },
   });
@@ -110,6 +112,7 @@ export async function sincronizarCobranzaSistema(now = new Date()) {
     where: {
       estatus: EstadoRecibo.VENCIDO,
       fechaVencimiento: { gte: currentDate },
+      contrato: { unidad: { propiedad: { archivadaEn: null } } },
     },
     data: { estatus: EstadoRecibo.PENDIENTE },
   });
@@ -213,9 +216,13 @@ export async function registrarPagoRecibo(
   return prisma.$transaction(async (tx) => {
     const receipt = await tx.recibo.findUnique({
       where: { id },
-      include: { pagos: { where: { anuladoEn: null } } },
+      include: {
+        pagos: { where: { anuladoEn: null } },
+        contrato: { include: { unidad: { include: { propiedad: { select: { archivadaEn: true } } } } } },
+      },
     });
     if (!receipt) throw new DomainError("NOT_FOUND", "El recibo no existe.");
+    if (receipt.contrato.unidad.propiedad.archivadaEn) throw new DomainError("PROPERTY_ARCHIVED", "La propiedad está archivada y es de solo consulta.");
 
     const summary = receiptPaymentSummary(receipt);
     const paymentCents = cents(data.monto);
@@ -283,10 +290,16 @@ export async function revertirPagoRecibo(
     const payment = await tx.pagoRecibo.findUnique({
       where: { id },
       include: {
-        recibo: { include: { pagos: { where: { anuladoEn: null } } } },
+        recibo: {
+          include: {
+            pagos: { where: { anuladoEn: null } },
+            contrato: { include: { unidad: { include: { propiedad: { select: { archivadaEn: true } } } } } },
+          },
+        },
       },
     });
     if (!payment) throw new DomainError("NOT_FOUND", "El pago no existe.");
+    if (payment.recibo.contrato.unidad.propiedad.archivadaEn) throw new DomainError("PROPERTY_ARCHIVED", "La propiedad está archivada y es de solo consulta.");
     if (payment.anuladoEn) throw new DomainError("PAYMENT_REVERSED", "El pago ya fue revertido.");
 
     const summary = receiptPaymentSummary(payment.recibo);

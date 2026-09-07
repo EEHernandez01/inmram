@@ -118,12 +118,14 @@ model Propiedad {
   marca               Marca?      @relation(fields: [marcaId], references: [id], onDelete: SetNull)
   unidades            Unidad[]
   archivos            ArchivoExpediente[]
+  archivadaEn         DateTime?
   creadoEn            DateTime    @default(now())
   actualizadoEn       DateTime    @updatedAt
 
   @@index([propietarioId])
   @@index([marcaId])
   @@index([googlePlaceId])
+  @@index([archivadaEn])
 }
 
 model Unidad {

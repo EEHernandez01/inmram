@@ -15,7 +15,7 @@ export default async function ContractDetailPage({ params, searchParams }: { par
   const query = await searchParams;
   const [{ user }, contract] = await Promise.all([getSystemUser(), obtenerContrato(id)]);
   if (!contract) notFound();
-  const canWrite = WRITE_ROLES.includes(user.rol as (typeof WRITE_ROLES)[number]);
+  const canWrite = WRITE_ROLES.includes(user.rol as (typeof WRITE_ROLES)[number]) && !contract.unidad.propiedad.archivadaEn;
   const today = currentCollectionDate();
   const renewalStart = new Date(contract.fechaFin); renewalStart.setUTCDate(renewalStart.getUTCDate() + 1);
   const renewalEnd = new Date(renewalStart); renewalEnd.setUTCFullYear(renewalEnd.getUTCFullYear() + 1); renewalEnd.setUTCDate(renewalEnd.getUTCDate() - 1);
@@ -32,6 +32,7 @@ export default async function ContractDetailPage({ params, searchParams }: { par
 
   return <>
     <PageHeader action={canWrite ? <Link className="cursor-pointer rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover" href={`/contratos/${id}/editar`}>Editar contrato</Link> : null} description={`${contract.unidad.propiedad.direccion} · Unidad ${contract.unidad.identificador}`} eyebrow="Contrato vigente" title={contract.arrendatario} />
+    {contract.unidad.propiedad.archivadaEn ? <Alert className="mt-7" variant="warning">Propiedad archivada: este contrato y sus recibos son solo consulta.</Alert> : null}
     {query.renovado ? <Alert className="mt-7" variant="success">Contrato renovado y ajuste INPC registrado.</Alert> : null}{query.error ? <Alert className="mt-7" variant="danger">{query.error}</Alert> : null}
 
     <section className="mt-7 rounded-3xl bg-brand p-6 text-white shadow-[7px_7px_15px_#c6cdd6,-7px_-7px_15px_#fff]"><div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[.13em] text-white/65">Estado de cuenta</p><p className="mt-2 font-serif text-3xl font-semibold">{unpaidReceipts.length ? `${unpaidReceipts.length} pago${unpaidReceipts.length === 1 ? " pendiente" : "s pendientes"}` : "Pagos al corriente"}</p><p className="mt-2 text-sm text-white/75">Vence el {formatDate(contract.fechaFin)} · {daysRemaining} días restantes de vigencia</p></div><div className="flex flex-wrap gap-3"><Link className="cursor-pointer rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-brand hover:bg-white/90" href="/cobranza">Gestionar pagos</Link><Link className="cursor-pointer rounded-xl border border-white/35 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10" href={`/propiedades/${contract.unidad.propiedadId}/unidades/${contract.unidadId}`}>Ver unidad</Link></div></div></section>

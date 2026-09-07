@@ -18,7 +18,7 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ id:
   const { id, unidadId } = await params;
   const [{ user }, unit] = await Promise.all([getSystemUser(), obtenerUnidad(unidadId)]);
   if (!unit || unit.propiedadId !== id) notFound();
-  const canWrite = WRITE_ROLES.includes(user.rol as (typeof WRITE_ROLES)[number]);
+  const canWrite = WRITE_ROLES.includes(user.rol as (typeof WRITE_ROLES)[number]) && !unit.propiedad.archivadaEn;
   const activeContract = unit.contratos.find((contract) => contract.estado === "ACTIVO");
   const activeReceiptAccounts = activeContract ? activeContract.recibos.map((receipt) => {
     const total = calculateReceiptTotal({ rent: Number(receipt.monto), servicesCharge: Number(receipt.cargoFijo) });
@@ -28,6 +28,7 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ id:
   return (
     <>
       <PageHeader action={canWrite ? <Link className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-[4px_4px_9px_#b8c2cd] hover:bg-brand-hover" href={`/propiedades/${id}/unidades/${unidadId}/editar`}>Editar unidad</Link> : null} description={unit.propiedad.direccion} eyebrow={typeLabels[unit.tipo]} title={`Unidad ${unit.identificador}`} />
+      {unit.propiedad.archivadaEn ? <p className="mt-5 rounded-card border border-warning/30 bg-warning-soft p-4 text-sm text-ink">Propiedad archivada: esta unidad y su historial son solo consulta.</p> : null}
 
       <section className="mt-7 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(300px,.55fr)]">
         <div className="rounded-3xl bg-bg p-6 shadow-[7px_7px_15px_#c6cdd6,-7px_-7px_15px_#fff]"><div className="flex items-center justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[.13em] text-brand/70">Características</p><h2 className="mt-1 font-serif text-xl font-semibold text-ink">Distribución de la unidad</h2></div><span className="rounded-full bg-brand/8 px-3 py-1.5 text-xs font-bold text-brand">{typeLabels[unit.tipo]}</span></div><dl className="mt-6 grid grid-cols-2 overflow-hidden rounded-2xl border border-brand/10 sm:grid-cols-4">{[["Superficie", `${unit.metrosCuadrados.toString()} m²`], ["Piso", unit.piso || "No especificado"], ["Recámaras", String(unit.recamaras)], ["Baños", `${unit.banosCompletos}${unit.mediosBanos ? ` + ${unit.mediosBanos} medio` : ""}`]].map(([label, value], index) => <div className={`min-w-0 p-4 ${index % 2 === 0 ? "border-r border-brand/10 sm:border-r-0" : ""} ${index < 2 ? "border-b border-brand/10 sm:border-b-0" : ""} ${index > 1 ? "sm:border-l sm:border-brand/10" : ""}`} key={label}><dt className="text-[10px] font-bold uppercase tracking-[.08em] text-ink-secondary">{label}</dt><dd className="mt-2 text-base font-bold text-ink [font-variant-numeric:tabular-nums]">{value}</dd></div>)}</dl>{unit.descripcion ? <div className="mt-6 border-t border-brand/10 pt-5"><p className="text-[10px] font-bold uppercase tracking-[.12em] text-ink-secondary">Descripción</p><p className="mt-2 max-w-3xl text-sm leading-6 text-ink-secondary">{unit.descripcion}</p></div> : null}</div>

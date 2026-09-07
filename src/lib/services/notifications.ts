@@ -16,6 +16,7 @@ export async function enviarRecordatorioRecibo(receiptId: string) {
   if (!apiKey || !from) throw new DomainError("EMAIL_NOT_CONFIGURED", "Configura RESEND_API_KEY y NOTIFICATION_FROM_EMAIL para enviar correos.");
   const receipt = await prisma.recibo.findUnique({ where: { id }, include: { contrato: { include: { unidad: { include: { propiedad: true } } } }, pagos: { where: { anuladoEn: null } } } });
   if (!receipt) throw new DomainError("NOT_FOUND", "El recibo no existe.");
+  if (receipt.contrato.unidad.propiedad.archivadaEn) throw new DomainError("PROPERTY_ARCHIVED", "La propiedad está archivada y es de solo consulta.");
   if (!receipt.contrato.emailArrendatario) throw new DomainError("MISSING_TENANT_EMAIL", "El contrato no tiene correo del arrendatario.");
   const servicesCharge = Number(receipt.cargoFijo);
   const total = calculateReceiptTotal({ rent: Number(receipt.monto), servicesCharge });

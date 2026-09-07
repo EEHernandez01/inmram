@@ -91,12 +91,15 @@ export async function eliminarPropietario(propietarioId: string) {
   return prisma.propietario.delete({ where: { id } });
 }
 
-export async function listarPropiedades() {
+export async function listarPropiedades({ archivadas = false }: { archivadas?: boolean } = {}) {
   await requireSystemRole(READ_ROLES);
   const ownerId = await getOwnerScope();
 
   return prisma.propiedad.findMany({
-    where: ownerId ? { propietarioId: ownerId } : undefined,
+    where: {
+      propietarioId: ownerId ?? undefined,
+      archivadaEn: archivadas ? { not: null } : null,
+    },
     orderBy: { direccion: "asc" },
     include: {
       propietario: true,
@@ -138,29 +141,39 @@ export async function actualizarPropiedad(
   const id = recordIdSchema.parse(propiedadId);
   const data = propiedadInputSchema.parse(input);
 
+  await asegurarPropiedadActiva(id);
+
   return prisma.propiedad.update({ where: { id }, data });
 }
 
-export async function eliminarPropiedad(propiedadId: string) {
-  await requireSystemRole(WRITE_ROLES);
+export async function archivarPropiedad(propiedadId: string) {
+  const { user } = await requireSystemRole(WRITE_ROLES);
   const id = recordIdSchema.parse(propiedadId);
   const propiedad = await prisma.propiedad.findUnique({
     where: { id },
-    select: { _count: { select: { unidades: true } } },
+    select: { direccion: true, archivadaEn: true, _count: { select: { unidades: true } } },
   });
 
   if (!propiedad) {
     throw new DomainError("NOT_FOUND", "La propiedad no existe.");
   }
 
-  if (propiedad._count.unidades > 0) {
-    throw new DomainError(
-      "PROPERTY_HAS_UNITS",
-      "No se puede eliminar una propiedad que tiene unidades.",
-    );
+  if (propiedad.archivadaEn) {
+    throw new DomainError("PROPERTY_ARCHIVED", "La propiedad ya está archivada.");
   }
 
-  return prisma.propiedad.delete({ where: { id } });
+  return prisma.$transaction(async (tx) => {
+    const archived = await tx.propiedad.update({ where: { id }, data: { archivadaEn: new Date() } });
+    await registrarAuditoria(tx, {
+      usuarioSistemaId: user.id,
+      accion: "ARCHIVAR",
+      entidad: "Propiedad",
+      entidadId: id,
+      antes: { direccion: propiedad.direccion, unidades: propiedad._count.unidades },
+      despues: { archivadaEn: archived.archivadaEn?.toISOString() ?? null },
+    });
+    return archived;
+  });
 }
 
 export async function listarUnidades(propiedadId: string) {
@@ -204,6 +217,7 @@ export async function obtenerUnidad(unidadId: string) {
 export async function crearUnidad(input: UnidadInput) {
   await requireSystemRole(WRITE_ROLES);
   const data = unidadInputSchema.parse(input);
+  await asegurarPropiedadActiva(data.propiedadId);
 
   return prisma.unidad.create({
     data: {
@@ -218,6 +232,7 @@ export async function actualizarUnidad(unidadId: string, input: UnidadInput) {
   await requireSystemRole(WRITE_ROLES);
   const id = recordIdSchema.parse(unidadId);
   const data = unidadInputSchema.parse(input);
+  await asegurarPropiedadActiva(data.propiedadId);
 
   return prisma.unidad.update({
     where: { id },
@@ -236,12 +251,17 @@ export async function eliminarUnidad(unidadId: string) {
     where: { id },
     select: {
       medidorAgua: { select: { id: true } },
+      propiedad: { select: { archivadaEn: true } },
       _count: { select: { contratos: true } },
     },
   });
 
   if (!unidad) {
     throw new DomainError("NOT_FOUND", "La unidad no existe.");
+  }
+
+  if (unidad.propiedad.archivadaEn) {
+    throw new DomainError("PROPERTY_ARCHIVED", "La propiedad está archivada y es de solo consulta.");
   }
 
   if (unidad.medidorAgua || unidad._count.contratos > 0) {
@@ -290,6 +310,7 @@ export async function obtenerContrato(contratoId: string) {
 export async function crearContrato(input: ContratoInput) {
   const { user } = await requireSystemRole(WRITE_ROLES);
   const data = contratoInputSchema.parse(input);
+  await asegurarUnidadEnPropiedadActiva(data.unidadId);
 
   if (data.estado === EstadoContrato.ACTIVO) {
     await asegurarUnidadSinContratoActivo(data.unidadId);
@@ -341,6 +362,7 @@ export async function actualizarContrato(
   const { user } = await requireSystemRole(WRITE_ROLES);
   const id = recordIdSchema.parse(contratoId);
   const data = contratoInputSchema.parse(input);
+  await asegurarUnidadEnPropiedadActiva(data.unidadId);
 
   if (data.estado === EstadoContrato.ACTIVO) {
     await asegurarUnidadSinContratoActivo(data.unidadId, id);
@@ -358,12 +380,33 @@ export async function actualizarContrato(
 export async function vencerContrato(contratoId: string) {
   const { user } = await requireSystemRole(WRITE_ROLES);
   const id = recordIdSchema.parse(contratoId);
+  const contract = await prisma.contrato.findUnique({ where: { id }, select: { unidadId: true } });
+  if (!contract) throw new DomainError("NOT_FOUND", "El contrato no existe.");
+  await asegurarUnidadEnPropiedadActiva(contract.unidadId);
 
   return prisma.$transaction(async (tx) => {
     const updated = await tx.contrato.update({ where: { id }, data: { estado: EstadoContrato.VENCIDO } });
     await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "VENCER", entidad: "Contrato", entidadId: id, antes: { estado: EstadoContrato.ACTIVO }, despues: { estado: EstadoContrato.VENCIDO } });
     return updated;
   });
+}
+
+export async function asegurarPropiedadActiva(propiedadId: string) {
+  const property = await prisma.propiedad.findUnique({
+    where: { id: propiedadId },
+    select: { archivadaEn: true },
+  });
+  if (!property) throw new DomainError("NOT_FOUND", "La propiedad no existe.");
+  if (property.archivadaEn) throw new DomainError("PROPERTY_ARCHIVED", "La propiedad está archivada y es de solo consulta.");
+}
+
+export async function asegurarUnidadEnPropiedadActiva(unidadId: string) {
+  const unit = await prisma.unidad.findUnique({
+    where: { id: unidadId },
+    select: { propiedad: { select: { archivadaEn: true } } },
+  });
+  if (!unit) throw new DomainError("NOT_FOUND", "La unidad no existe.");
+  if (unit.propiedad.archivadaEn) throw new DomainError("PROPERTY_ARCHIVED", "La propiedad está archivada y es de solo consulta.");
 }
 
 async function asegurarUnidadSinContratoActivo(

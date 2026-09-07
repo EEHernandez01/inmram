@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { UnitForm } from "@/components/forms/unit-form";
 import { Alert } from "@/components/ui/alert";
@@ -13,6 +13,7 @@ export default async function EditUnitPage({ params, searchParams }: { params: P
   const query = await searchParams;
   const unit = await obtenerUnidad(unidadId);
   if (!unit || unit.propiedadId !== id) notFound();
+  if (unit.propiedad.archivadaEn) redirect(`/propiedades/${id}/unidades/${unidadId}`);
 
   return (
     <>

@@ -46,7 +46,7 @@ export async function listarAlertasRenovacion() {
   const hoy = currentCollectionDate();
   const limite = new Date(hoy); limite.setUTCDate(limite.getUTCDate() + 90);
   const contratos = await prisma.contrato.findMany({
-    where: { estado: EstadoContrato.ACTIVO, fechaFin: { gte: hoy, lte: limite } },
+    where: { estado: EstadoContrato.ACTIVO, fechaFin: { gte: hoy, lte: limite }, unidad: { propiedad: { archivadaEn: null } } },
     include: { unidad: { include: { propiedad: true } } }, orderBy: { fechaFin: "asc" },
   });
   return contratos.map((contrato) => {
@@ -58,7 +58,7 @@ export async function listarAlertasRenovacion() {
 export async function contarAlertasRenovacionSistema() {
   const hoy = currentCollectionDate();
   const limite = new Date(hoy); limite.setUTCDate(limite.getUTCDate() + 90);
-  return prisma.contrato.count({ where: { estado: EstadoContrato.ACTIVO, fechaFin: { gte: hoy, lte: limite } } });
+  return prisma.contrato.count({ where: { estado: EstadoContrato.ACTIVO, fechaFin: { gte: hoy, lte: limite }, unidad: { propiedad: { archivadaEn: null } } } });
 }
 
 export async function renovarContrato(contratoId: string, input: unknown) {
@@ -71,10 +71,11 @@ export async function renovarContrato(contratoId: string, input: unknown) {
   if (monthDifference !== 12) throw new DomainError("INVALID_INFLATION_WINDOW", "La renovación debe comparar niveles separados por 12 meses.");
 
   const [contract, levels] = await Promise.all([
-    prisma.contrato.findUnique({ where: { id } }),
+    prisma.contrato.findUnique({ where: { id }, include: { unidad: { include: { propiedad: { select: { archivadaEn: true } } } } } }),
     prisma.indiceInflacion.findMany({ where: { indice: data.indice, mes: { in: [baseDate, finalDate] } } }),
   ]);
   if (!contract) throw new DomainError("NOT_FOUND", "El contrato no existe.");
+  if (contract.unidad.propiedad.archivadaEn) throw new DomainError("PROPERTY_ARCHIVED", "La propiedad está archivada y es de solo consulta.");
   if (contract.estado !== EstadoContrato.ACTIVO) throw new DomainError("CONTRACT_NOT_ACTIVE", "Solo se puede renovar un contrato activo.");
   if (currentCollectionDate() < contract.fechaFin) throw new DomainError("EARLY_RENEWAL", "La renovación puede aplicarse cuando llegue la fecha de finalización; antes puedes preparar los niveles INPC.");
   const expectedStart = new Date(contract.fechaFin); expectedStart.setUTCDate(expectedStart.getUTCDate() + 1);

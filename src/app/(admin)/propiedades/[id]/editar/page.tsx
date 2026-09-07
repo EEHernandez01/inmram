@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
+import { ArchivePropertyButton } from "@/components/forms/archive-property-button";
 import { PropertyForm } from "@/components/forms/property-form";
 import { Alert } from "@/components/ui/alert";
 import { PageHeader } from "@/components/ui/page-header";
@@ -16,6 +17,7 @@ export default async function EditPropertyPage({ params, searchParams }: { param
     listarPropietarios(),
   ]);
   if (!property) notFound();
+  if (property.archivadaEn) redirect(`/propiedades/${id}`);
 
   return (
     <>
@@ -23,7 +25,7 @@ export default async function EditPropertyPage({ params, searchParams }: { param
       <section className="mt-7 rounded-card border border-border bg-surface p-5">
         {query.error ? <Alert className="mb-5" variant="danger">{query.error}</Alert> : null}
         <PropertyForm action={`/api/propiedades/${id}`} defaults={{ direccion: property.direccion, googlePlaceId: property.googlePlaceId ?? undefined, latitud: property.latitud?.toString(), longitud: property.longitud?.toString(), valorCatastral: property.valorCatastral.toString(), valorComercialTotal: property.valorComercialTotal.toString(), predialAnual: property.predialAnual.toString(), mantenimientoAnual: property.mantenimientoAnual.toString(), propietarioId: property.propietarioId }} existingPhotos={property.archivos.map(({ id: photoId, nombre, url }) => ({ id: photoId, nombre, url }))} owners={owners} placesEnabled={Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY)} submitLabel="Guardar cambios" />
-        <Link className="mt-5 inline-block text-sm font-semibold text-brand hover:text-brand-hover" href={`/propiedades/${id}`}>Cancelar</Link>
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-4"><Link className="text-sm font-semibold text-brand hover:text-brand-hover" href={`/propiedades/${id}`}>Cancelar</Link><ArchivePropertyButton action={`/api/propiedades/${id}/archivar`} /></div>
       </section>
     </>
   );

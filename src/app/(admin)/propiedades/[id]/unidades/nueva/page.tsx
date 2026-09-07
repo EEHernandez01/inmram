@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { UnitForm } from "@/components/forms/unit-form";
 import { Alert } from "@/components/ui/alert";
@@ -13,6 +13,7 @@ export default async function NewUnitPage({ params, searchParams }: { params: Pr
   const query = await searchParams;
   const property = await obtenerPropiedad(id);
   if (!property) notFound();
+  if (property.archivadaEn) redirect(`/propiedades/${id}`);
 
   return (
     <>

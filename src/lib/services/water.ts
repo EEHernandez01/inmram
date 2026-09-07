@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db/prisma";
 import { DomainError } from "@/lib/domain/errors";
 import { WATER_CONTROL_ENABLED } from "@/lib/features";
 import { registrarAuditoria } from "@/lib/services/audit";
+import { asegurarUnidadEnPropiedadActiva } from "@/lib/services/foundation";
 import { waterMeterInputSchema, waterPeriodDate, waterReadingInputSchema } from "@/lib/validation/water";
 
 export async function listarAgua() {
@@ -23,6 +24,7 @@ export async function crearMedidorAgua(input: unknown) {
   const { user } = await requireSystemRole(WRITE_ROLES);
   assertWaterControlEnabled();
   const data = waterMeterInputSchema.parse(input);
+  await asegurarUnidadEnPropiedadActiva(data.unidadId);
   return prisma.$transaction(async (tx) => {
     const meter = await tx.medidorAgua.create({ data });
     await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "CREAR", entidad: "MedidorAgua", entidadId: meter.id, despues: { unidadId: meter.unidadId, lecturasSoloControl: true } });
@@ -36,8 +38,9 @@ export async function registrarLecturaAgua(input: unknown, now = new Date()) {
   const data = waterReadingInputSchema.parse(input);
   const period = waterPeriodDate(data.periodo);
   if (period > currentReceiptPeriod(now)) throw new DomainError("FUTURE_WATER_READING", "No se pueden registrar lecturas de periodos futuros.");
-  const meter = await prisma.medidorAgua.findUnique({ where: { id: data.medidorAguaId }, include: { lecturas: { orderBy: { periodo: "desc" }, take: 1 } } });
+  const meter = await prisma.medidorAgua.findUnique({ where: { id: data.medidorAguaId }, include: { unidad: { include: { propiedad: { select: { archivadaEn: true } } } }, lecturas: { orderBy: { periodo: "desc" }, take: 1 } } });
   if (!meter) throw new DomainError("NOT_FOUND", "El medidor no existe.");
+  if (meter.unidad.propiedad.archivadaEn) throw new DomainError("PROPERTY_ARCHIVED", "La propiedad está archivada y es de solo consulta.");
   const latest = meter.lecturas[0];
   if (latest && period <= latest.periodo) throw new DomainError("READING_ORDER", "Las lecturas deben registrarse en orden mensual y sin duplicados.");
   if (!latest && !data.lecturaAnterior) throw new DomainError("FIRST_READING_REQUIRED", "Captura la lectura anterior para inicializar el medidor.");

@@ -14,7 +14,7 @@ import {
   crearContrato,
   crearPropiedad,
   crearUnidad,
-  eliminarPropiedad,
+  archivarPropiedad,
   eliminarUnidad,
   vencerContrato,
 } from "@/lib/services/foundation";
@@ -122,9 +122,10 @@ export async function updatePropertyFormAction(propertyId: string, formData: For
   redirect(`/propiedades/${propertyId}`);
 }
 
-export async function deletePropertyAction(propertyId: string) {
-  await eliminarPropiedad(propertyId);
+export async function archivePropertyAction(propertyId: string) {
+  await archivarPropiedad(propertyId);
   revalidatePath("/propiedades");
+  revalidatePath(`/propiedades/${propertyId}`);
   redirect("/propiedades");
 }
 
