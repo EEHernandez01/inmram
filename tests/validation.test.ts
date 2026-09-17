@@ -11,6 +11,8 @@ import { paymentInputSchema, paymentReversalInputSchema } from "../src/lib/valid
 import { propertyPhotoUploadSchema } from "../src/lib/validation/property-photos.ts";
 import { canManageOperations, canViewReports } from "../src/lib/auth/role-policy.ts";
 import { RolUsuario } from "../src/generated/prisma/enums.ts";
+import { formatCurrency, normalizeCurrencyInput } from "../src/lib/format.ts";
+import { hasValidPagareDetails, isCancellationDateAllowed } from "../src/lib/contracts.ts";
 
 const unitId = "4ca5a15a-45ef-47cc-8c3c-557e1fd1b1c6";
 const meterId = "8e6daed2-d5f8-420f-823a-6ae9b70c04fa";
@@ -94,9 +96,37 @@ test("valida pagos parciales, referencias y motivos de reversión", () => {
     referencia: "SPEI-12345",
   });
   assert.equal(payment.monto, "1250.50");
+  assert.equal(paymentInputSchema.parse({ monto: "MXN$ 1,250.50", fechaPago: "2026-08-15", formaPago: "TRANSFERENCIA" }).monto, "1250.50");
   assert.equal(paymentReversalInputSchema.safeParse({ motivo: "Pago duplicado" }).success, true);
   assert.equal(paymentInputSchema.safeParse({ monto: "0", fechaPago: "2026-08-15", formaPago: "EFECTIVO" }).success, false);
   assert.equal(paymentReversalInputSchema.safeParse({ motivo: "No" }).success, false);
+});
+
+test("solo permite cancelar dentro de la vigencia y hasta la fecha actual", () => {
+  const startDate = new Date("2026-01-01T00:00:00.000Z");
+  const endDate = new Date("2026-12-31T00:00:00.000Z");
+  const today = new Date("2026-09-17T00:00:00.000Z");
+  assert.equal(isCancellationDateAllowed({ cancellationDate: new Date("2026-09-17T00:00:00.000Z"), startDate, endDate, today }), true);
+  assert.equal(isCancellationDateAllowed({ cancellationDate: new Date("2025-12-31T00:00:00.000Z"), startDate, endDate, today }), false);
+  assert.equal(isCancellationDateAllowed({ cancellationDate: new Date("2026-09-18T00:00:00.000Z"), startDate, endDate, today }), false);
+});
+
+test("el pagaré requiere importe, fechas ordenadas y lugar de pago", () => {
+  assert.equal(hasValidPagareDetails({ amount: "25000.00", issueDate: "2026-01-15", dueDate: "2026-12-31", paymentPlace: "Ciudad de México" }), true);
+  assert.equal(hasValidPagareDetails({ amount: "25000.00", issueDate: "2026-12-31", dueDate: "2026-01-15", paymentPlace: "Ciudad de México" }), false);
+  assert.equal(hasValidPagareDetails({ amount: "25000.00", issueDate: "2026-01-15", dueDate: "2026-12-31", paymentPlace: "" }), false);
+});
+
+test("normaliza importes contables MXN sin perder la precisión de las tarifas de agua", () => {
+  const meter = waterMeterInputSchema.parse({
+    unidadId: unitId,
+    cuotaFija: "MXN$ 1,250.50",
+    tarifaPorMetroCubico: "MXN$ 18.1234",
+  });
+  assert.equal(meter.cuotaFija, "1250.50");
+  assert.equal(meter.tarifaPorMetroCubico, "18.1234");
+  assert.equal(normalizeCurrencyInput("MXN$ 100,000,000.00"), "100000000.00");
+  assert.equal(formatCurrency("100000000"), "MXN$ 100,000,000.00");
 });
 
 test("acepta únicamente referencias de fotos públicas de Vercel Blob", () => {

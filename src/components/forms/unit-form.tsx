@@ -12,9 +12,10 @@ const unitTypes = [
 ] as const;
 
 type UnitDefaults = {
-  identificador: string;
-  tipo: string;
-  metrosCuadrados: string;
+  propietarioId?: string;
+  identificador?: string;
+  tipo?: string;
+  metrosCuadrados?: string;
   descripcion?: string | null;
   piso?: string | null;
   recamaras?: number;
@@ -23,8 +24,9 @@ type UnitDefaults = {
   amenidades?: string | null;
 };
 
-export function UnitForm({ defaults, propertyId, submitLabel, unitId }: {
+export function UnitForm({ defaults, owners, propertyId, submitLabel, unitId }: {
   defaults?: UnitDefaults;
+  owners: { value: string; nombre: string; detalle: string }[];
   propertyId: string;
   submitLabel: string;
   unitId?: string;
@@ -37,6 +39,12 @@ export function UnitForm({ defaults, propertyId, submitLabel, unitId }: {
     <form action={action} className="space-y-5" method="post">
       <input name="propiedadId" type="hidden" value={propertyId} />
       <div className="grid gap-5 sm:grid-cols-2">
+        <Field label="Dueño de la unidad" hint="Incluye todos los usuarios registrados y los propietarios sin cuenta de acceso.">
+          <Select defaultValue={defaults?.propietarioId ?? ""} name="propietarioId" required>
+            <option value="">Selecciona un dueño</option>
+            {owners.map((owner) => <option key={owner.value} value={owner.value}>{owner.nombre}</option>)}
+          </Select>
+        </Field>
         <Field label="Identificador">
           <Input defaultValue={defaults?.identificador} maxLength={100} name="identificador" placeholder="101, Local A…" required />
         </Field>
@@ -60,7 +68,7 @@ export function UnitForm({ defaults, propertyId, submitLabel, unitId }: {
         <Textarea defaultValue={defaults?.descripcion ?? ""} maxLength={2000} name="descripcion" rows={4} />
       </Field>
       <Field label="Amenidades" hint="Separadas por coma; ej. estacionamiento, balcón, elevador">
-        <div className="grid grid-cols-2 gap-2 text-sm font-normal sm:grid-cols-3">{["Estacionamiento", "Balcón", "Elevador", "Cisterna", "Aire acondicionado", "Amueblado"].map((item) => <label className="flex items-center gap-2 rounded-lg bg-bg px-3 py-2" key={item}><input defaultChecked={defaults?.amenidades?.split(", ").includes(item)} name="amenidades" type="checkbox" value={item} />{item}</label>)}</div>
+        <div className="grid grid-cols-2 gap-2 text-sm font-normal sm:grid-cols-3">{["Estacionamiento", "Balcón", "Elevador", "Terraza", "Roof garden"].map((item) => <label className="flex items-center gap-2 rounded-lg bg-bg px-3 py-2" key={item}><input defaultChecked={defaults?.amenidades?.split(", ").includes(item)} name="amenidades" type="checkbox" value={item} />{item}</label>)}</div>
       </Field>
       <FormStatus message={undefined} />
       <Button type="submit">

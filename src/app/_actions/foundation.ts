@@ -132,6 +132,7 @@ export async function archivePropertyAction(propertyId: string) {
 function unitInput(formData: FormData) {
   return {
     propiedadId: value(formData, "propiedadId"),
+    propietarioId: value(formData, "propietarioId"),
     identificador: value(formData, "identificador"),
     tipo: value(formData, "tipo") as TipoUnidad,
     metrosCuadrados: value(formData, "metrosCuadrados"),
@@ -222,8 +223,12 @@ function contractInput(formData: FormData) {
     emailArrendatario: optionalValue(formData, "emailArrendatario"),
     telefonoArrendatario: optionalValue(formData, "telefonoArrendatario"),
     aval: value(formData, "aval"),
-    tipoGarantia: value(formData, "tipoGarantia") as "AVAL" | "PRENDA" | "INMUEBLE",
+    tipoGarantia: value(formData, "tipoGarantia") as "AVAL" | "PRENDA" | "INMUEBLE" | "PAGARE",
     valorGarantia: optionalValue(formData, "valorGarantia"),
+    pagareMonto: optionalValue(formData, "pagareMonto"),
+    pagareFechaEmision: optionalValue(formData, "pagareFechaEmision"),
+    pagareFechaVencimiento: optionalValue(formData, "pagareFechaVencimiento"),
+    pagareLugarPago: optionalValue(formData, "pagareLugarPago"),
     avalTelefono: optionalValue(formData, "avalTelefono"),
     avalCorreo: optionalValue(formData, "avalCorreo"),
     fechaInicio: value(formData, "fechaInicio"),

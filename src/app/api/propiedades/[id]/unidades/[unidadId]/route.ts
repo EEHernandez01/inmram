@@ -20,6 +20,7 @@ export async function POST(
     const form = await request.formData();
     await actualizarUnidad(unidadId, {
       propiedadId: id,
+      propietarioId: String(form.get("propietarioId") ?? ""),
       identificador: String(form.get("identificador") ?? ""),
       tipo: String(form.get("tipo") ?? "") as "DEPARTAMENTO" | "LOCAL_COMERCIAL" | "ACCESORIA" | "BODEGA" | "OFICINA" | "OTRO",
       metrosCuadrados: String(form.get("metrosCuadrados") ?? ""),

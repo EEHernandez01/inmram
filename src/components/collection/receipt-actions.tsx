@@ -1,6 +1,7 @@
 import { EstadoRecibo } from "@/generated/prisma/enums";
 import { ConfirmSubmitButton } from "@/components/forms/confirm-submit-button";
 import { Button } from "@/components/ui/button";
+import { MoneyInput } from "@/components/ui/money-input";
 import { formatCurrency, formatDate } from "@/lib/format";
 
 import type { CollectionReceipt } from "./types";
@@ -75,7 +76,7 @@ export function ReceiptAction({
     <div>
       {settled ? <p className="text-sm font-semibold text-success">Recibo liquidado</p> : <form action={`/api/recibos/${receipt.id}/pago`} className={mobile ? "grid gap-3 sm:grid-cols-2" : "grid gap-3 sm:grid-cols-2 xl:grid-cols-4"} method="post">
         <input name="periodo" type="hidden" value={periodValue} />
-        <label className="text-xs font-semibold text-ink-secondary"><span className="block">Importe</span><input className="mt-1 block w-full rounded border border-border bg-surface px-2 py-2 text-sm text-ink" defaultValue={receipt.saldoPendiente.toFixed(2)} max={receipt.saldoPendiente.toFixed(2)} min="0.01" name="monto" required step="0.01" type="number" /></label>
+        <label className="text-xs font-semibold text-ink-secondary"><span className="block">Importe</span><MoneyInput className="mt-1 block w-full" defaultValue={receipt.saldoPendiente.toFixed(2)} name="monto" required /></label>
         <label className="text-xs font-semibold text-ink-secondary"><span className="block">Fecha</span><input className="mt-1 block w-full rounded border border-border bg-surface px-2 py-2 text-sm text-ink" defaultValue={paymentDate} name="fechaPago" required type="date" /></label>
         <label className="text-xs font-semibold text-ink-secondary"><span className="block">Forma</span><select className="mt-1 block w-full rounded border border-border bg-surface px-2 py-2 text-sm text-ink" name="formaPago" required><option value="TRANSFERENCIA">Transferencia</option><option value="EFECTIVO">Efectivo</option></select></label>
         <label className="text-xs font-semibold text-ink-secondary"><span className="block">Referencia (opcional)</span><input className="mt-1 block w-full rounded border border-border bg-surface px-2 py-2 text-sm text-ink" maxLength={100} name="referencia" /></label>
@@ -95,7 +96,7 @@ export function ReceiptDocuments({
     <div className="mb-3 flex flex-wrap gap-3">
       <a className="text-sm font-semibold text-brand hover:text-brand-hover" href={`/api/recibos/${receipt.id}/pdf`} rel="noreferrer" target="_blank">Ver PDF</a>
       {receipt.estatus === EstadoRecibo.PAGADO ? <a className="text-sm font-semibold text-brand hover:text-brand-hover" href={`/api/recibos/${receipt.id}/comprobante-pago`} rel="noreferrer" target="_blank">Comprobante de pago</a> : null}
-      {canWrite && receipt.contrato.emailArrendatario && receipt.estatus !== EstadoRecibo.PAGADO ? <form action={`/api/recibos/${receipt.id}/notificar`} method="post"><input name="periodo" type="hidden" value={periodValue} /><ConfirmSubmitButton message={`¿Enviar recordatorio a ${receipt.contrato.emailArrendatario}?`}>Enviar recordatorio</ConfirmSubmitButton></form> : null}
+      {canWrite && receipt.contrato.estado === "ACTIVO" && receipt.contrato.emailArrendatario && receipt.estatus !== EstadoRecibo.PAGADO ? <form action={`/api/recibos/${receipt.id}/notificar`} method="post"><input name="periodo" type="hidden" value={periodValue} /><ConfirmSubmitButton message={`¿Enviar recordatorio a ${receipt.contrato.emailArrendatario}?`}>Enviar recordatorio</ConfirmSubmitButton></form> : null}
     </div>
   );
 }

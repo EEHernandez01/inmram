@@ -4,12 +4,12 @@ import { PropertyForm } from "@/components/forms/property-form";
 import { Alert } from "@/components/ui/alert";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
-import { listarPropietarios } from "@/lib/services/foundation";
+import { listarOpcionesPropietario } from "@/lib/services/foundation";
 
 export default async function NewPropertyPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   await requireSystemRole(WRITE_ROLES);
   const query = await searchParams;
-  const owners = await listarPropietarios();
+  const owners = await listarOpcionesPropietario();
 
   return (
     <>

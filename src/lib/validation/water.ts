@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { normalizeCurrencyInput } from "../format.ts";
 
-const amount = z.string().trim().regex(/^\d{1,12}(?:\.\d{1,4})?$/, "Captura un importe válido.");
+const amount = z.preprocess(normalizeCurrencyInput, z.string().regex(/^\d{1,12}(?:\.\d{1,4})?$/, "Captura un importe válido."));
 const reading = z.string().trim().regex(/^\d{1,9}(?:\.\d{1,3})?$/, "Captura una lectura válida.");
 const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Selecciona un periodo válido.");
 

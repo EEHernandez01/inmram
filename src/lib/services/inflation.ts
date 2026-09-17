@@ -132,7 +132,7 @@ export async function obtenerEstadoPropuestaRenovacion(contratoId: string) {
   await requireSystemRole(READ_ROLES);
   const id = recordIdSchema.parse(contratoId);
   const ownerId = await getOwnerScope();
-  const contract = await prisma.contrato.findFirst({ where: { id, unidad: ownerId ? { propiedad: { propietarioId: ownerId } } : undefined }, select: { estado: true, fechaFin: true, renovacionNotificadaEn: true, rentaMensualBase: true, diaPago: true } });
+  const contract = await prisma.contrato.findFirst({ where: { id, unidad: ownerId ? { propietarioId: ownerId } : undefined }, select: { estado: true, fechaFin: true, renovacionNotificadaEn: true, rentaMensualBase: true, diaPago: true } });
   if (!contract || contract.estado !== EstadoContrato.ACTIVO || !isRenewalProposalWindow(contract.fechaFin, currentCollectionDate())) return { estado: "FUERA_DE_VENTANA" as const };
   const calculation = proposalCalculation(contract, await latestAnnualInpc());
   if (!calculation) return { estado: "PENDIENTE_INPC" as const };
@@ -143,7 +143,7 @@ export async function generarPropuestaRenovacionPdf(contratoId: string) {
   await requireSystemRole(READ_ROLES);
   const id = recordIdSchema.parse(contratoId);
   const ownerId = await getOwnerScope();
-  const contract = await prisma.contrato.findFirst({ where: { id, unidad: ownerId ? { propiedad: { propietarioId: ownerId } } : undefined }, include: { unidad: { include: { propiedad: true } } } });
+  const contract = await prisma.contrato.findFirst({ where: { id, unidad: ownerId ? { propietarioId: ownerId } : undefined }, include: { unidad: { include: { propiedad: true } } } });
   if (!contract) throw new DomainError("NOT_FOUND", "El contrato no existe.");
   const state = await obtenerEstadoPropuestaRenovacion(id);
   if (state.estado === "FUERA_DE_VENTANA") throw new DomainError("PROPOSAL_UNAVAILABLE", "La propuesta solo está disponible durante el mes previo al vencimiento.");
@@ -199,7 +199,8 @@ export async function renovarContrato(contratoId: string, input: unknown) {
     await tx.contrato.update({ where: { id }, data: { estado: EstadoContrato.VENCIDO } });
     const renewed = await tx.contrato.create({ data: {
       unidadId: contract.unidadId, arrendatario: contract.arrendatario, aval: contract.aval, tipoGarantia: contract.tipoGarantia,
-      valorGarantia: contract.valorGarantia,
+      valorGarantia: contract.valorGarantia, pagareMonto: contract.pagareMonto,
+      pagareFechaEmision: contract.pagareFechaEmision, pagareFechaVencimiento: contract.pagareFechaVencimiento, pagareLugarPago: contract.pagareLugarPago,
       emailArrendatario: contract.emailArrendatario, telefonoArrendatario: contract.telefonoArrendatario,
       avalTelefono: contract.avalTelefono, avalCorreo: contract.avalCorreo,
       fechaInicio: startDate, fechaFin: inflationDate(data.fechaFin), plazoMeses: data.plazoMeses,

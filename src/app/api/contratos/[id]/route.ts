@@ -23,8 +23,12 @@ export async function POST(
       emailArrendatario: formValue(form, "emailArrendatario") || null,
       telefonoArrendatario: formValue(form, "telefonoArrendatario") || null,
       aval: formValue(form, "aval"),
-      tipoGarantia: formValue(form, "tipoGarantia") as "AVAL" | "PRENDA" | "INMUEBLE",
+      tipoGarantia: formValue(form, "tipoGarantia") as "AVAL" | "PRENDA" | "INMUEBLE" | "PAGARE",
       valorGarantia: formValue(form, "valorGarantia") || null,
+      pagareMonto: formValue(form, "pagareMonto") || null,
+      pagareFechaEmision: formValue(form, "pagareFechaEmision") || null,
+      pagareFechaVencimiento: formValue(form, "pagareFechaVencimiento") || null,
+      pagareLugarPago: formValue(form, "pagareLugarPago") || null,
       avalTelefono: formValue(form, "avalTelefono") || null,
       avalCorreo: formValue(form, "avalCorreo") || null,
       fechaInicio: formValue(form, "fechaInicio"),
@@ -34,7 +38,7 @@ export async function POST(
       diaPago: Number(formValue(form, "diaPago")),
       depositoGarantia: formValue(form, "depositoGarantia"),
       cargoFijoMensual: formValue(form, "cargoFijoMensual") || "0.00",
-      estado: String(form.get("estado") ?? "ACTIVO") as "ACTIVO" | "VENCIDO",
+      estado: String(form.get("estado") ?? "ACTIVO") as "ACTIVO" | "VENCIDO" | "CANCELADO",
     });
 
     return NextResponse.redirect(new URL(`/contratos/${id}`, url), 303);

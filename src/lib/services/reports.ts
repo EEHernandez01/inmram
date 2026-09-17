@@ -13,22 +13,23 @@ export async function obtenerReporteRentabilidad(propertyFilter?: unknown) {
   const propertyId = parsed || undefined;
   const [properties, options] = await Promise.all([
     prisma.propiedad.findMany({
-      where: { id: propertyId, propietarioId: ownerId ?? undefined },
+      where: { id: propertyId, unidades: ownerId ? { some: { propietarioId: ownerId } } : undefined },
       orderBy: { direccion: "asc" },
       include: { unidades: { orderBy: { identificador: "asc" }, include: { contratos: { where: { estado: EstadoContrato.ACTIVO }, orderBy: { fechaInicio: "desc" }, take: 1 } } } },
     }),
-    prisma.propiedad.findMany({ where: { propietarioId: ownerId ?? undefined }, orderBy: { direccion: "asc" }, select: { id: true, direccion: true } }),
+    prisma.propiedad.findMany({ where: { unidades: ownerId ? { some: { propietarioId: ownerId } } : undefined }, orderBy: { direccion: "asc" }, select: { id: true, direccion: true } }),
   ]);
 
   const propertyReports = properties.map((property) => {
-    const propertyArea = property.unidades.reduce((sum, unit) => sum + Number(unit.metrosCuadrados), 0);
-    const units = property.unidades.map((unit) => {
+    const totalPropertyArea = property.unidades.reduce((sum, unit) => sum + Number(unit.metrosCuadrados), 0);
+    const visibleUnits = ownerId ? property.unidades.filter((unit) => unit.propietarioId === ownerId) : property.unidades;
+    const units = visibleUnits.map((unit) => {
       const contract = unit.contratos[0];
       const monthlyRent = contract ? Number(contract.rentaMensualBase) : 0;
       const metrics = calculateUnitProfitability({
         monthlyRent,
         unitArea: Number(unit.metrosCuadrados),
-        propertyArea,
+        propertyArea: totalPropertyArea,
         propertyAnnualTax: Number(property.predialAnual),
         propertyAnnualMaintenance: Number(property.mantenimientoAnual),
         propertyCommercialValue: Number(property.valorComercialTotal),
@@ -36,8 +37,10 @@ export async function obtenerReporteRentabilidad(propertyFilter?: unknown) {
       return { id: unit.id, identificador: unit.identificador, tipo: unit.tipo, metrosCuadrados: Number(unit.metrosCuadrados), tieneContratoActivo: Boolean(contract), ...metrics, monthlyRent };
     });
     const monthlyRent = units.reduce((sum, unit) => sum + unit.monthlyRent, 0);
-    const monthlyExpenses = propertyArea > 0 ? (Number(property.predialAnual) + Number(property.mantenimientoAnual)) / 12 : 0;
-    return { id: property.id, direccion: property.direccion, units, propertyArea, ...calculatePortfolioProfitability(monthlyRent, monthlyExpenses, Number(property.valorComercialTotal)) };
+    const monthlyExpenses = units.reduce((sum, unit) => sum + unit.monthlyExpenses, 0);
+    const commercialValue = units.reduce((sum, unit) => sum + unit.estimatedUnitValue, 0);
+    const propertyArea = visibleUnits.reduce((sum, unit) => sum + Number(unit.metrosCuadrados), 0);
+    return { id: property.id, direccion: property.direccion, units, propertyArea, ...calculatePortfolioProfitability(monthlyRent, monthlyExpenses, commercialValue) };
   });
 
   const portfolio = calculatePortfolioProfitability(

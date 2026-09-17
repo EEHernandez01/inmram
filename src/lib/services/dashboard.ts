@@ -23,7 +23,7 @@ export async function listarProximosVencimientosContrato(
       estado: EstadoContrato.ACTIVO,
       fechaFin: { gte: now, lte: limit },
       ...(ownerId
-        ? { unidad: { propiedad: { propietarioId: ownerId } } }
+        ? { unidad: { propietarioId: ownerId } }
         : {}),
     },
     orderBy: { fechaFin: "asc" },

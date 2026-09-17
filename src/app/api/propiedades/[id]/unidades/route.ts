@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 
 import { isSameOrigin, safeRouteError } from "@/lib/http/route-security";
 import { crearUnidad } from "@/lib/services/foundation";
-import { obtenerPropietarioActual } from "@/lib/services/profile";
 
 function formValue(form: FormData, key: string) {
   const value = String(form.get(key) ?? "").trim();
@@ -16,10 +15,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   try {
     const form = await request.formData();
-    await obtenerPropietarioActual();
-
     const unit = await crearUnidad({
       propiedadId: id,
+      propietarioId: String(form.get("propietarioId") ?? ""),
       identificador: String(form.get("identificador") ?? ""),
       tipo: String(form.get("tipo") ?? "") as "DEPARTAMENTO" | "LOCAL_COMERCIAL" | "ACCESORIA" | "BODEGA" | "OFICINA" | "OTRO",
       metrosCuadrados: String(form.get("metrosCuadrados") ?? ""),

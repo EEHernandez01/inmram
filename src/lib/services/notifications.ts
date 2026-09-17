@@ -1,5 +1,6 @@
 import "server-only";
 
+import { EstadoContrato } from "@/generated/prisma/enums";
 import { requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
 import { calculateReceiptPaymentBalance, calculateReceiptTotal } from "@/lib/calculations/collection";
 import { prisma } from "@/lib/db/prisma";
@@ -17,6 +18,7 @@ export async function enviarRecordatorioRecibo(receiptId: string) {
   const receipt = await prisma.recibo.findUnique({ where: { id }, include: { contrato: { include: { unidad: { include: { propiedad: true } } } }, pagos: { where: { anuladoEn: null } } } });
   if (!receipt) throw new DomainError("NOT_FOUND", "El recibo no existe.");
   if (receipt.contrato.unidad.propiedad.archivadaEn) throw new DomainError("PROPERTY_ARCHIVED", "La propiedad está archivada y es de solo consulta.");
+  if (receipt.contrato.estado !== EstadoContrato.ACTIVO) throw new DomainError("CONTRACT_NOT_ACTIVE", "No se pueden enviar recordatorios de un contrato cancelado o vencido.");
   if (!receipt.contrato.emailArrendatario) throw new DomainError("MISSING_TENANT_EMAIL", "El contrato no tiene correo del arrendatario.");
   const servicesCharge = Number(receipt.cargoFijo);
   const total = calculateReceiptTotal({ rent: Number(receipt.monto), servicesCharge });

@@ -61,7 +61,7 @@ export async function requirePropertyAccess(propertyId: string) {
   const ownerId = await getOwnerScope();
   if (!ownerId) return;
   const property = await prisma.propiedad.findFirst({
-    where: { id: propertyId, propietarioId: ownerId },
+    where: { id: propertyId, unidades: { some: { propietarioId: ownerId } } },
     select: { id: true },
   });
   if (!property) throw new AuthorizationError();

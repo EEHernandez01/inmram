@@ -11,6 +11,7 @@ import {
 } from "@/lib/auth/authorization";
 import { prisma } from "@/lib/db/prisma";
 import { DomainError } from "@/lib/domain/errors";
+import { isCancellationDateAllowed } from "@/lib/contracts";
 import { registrarAuditoria } from "@/lib/services/audit";
 import { eliminarFotosBlob } from "@/lib/property-photos";
 import {
@@ -21,25 +22,104 @@ import {
   currentReceiptPeriod,
 } from "@/lib/calculations/collection";
 import {
+  cancelacionContratoInputSchema,
   contratoInputSchema,
-  propiedadInputSchema,
+  propiedadConPropietarioSeleccionadoSchema,
   propietarioInputSchema,
   recordIdSchema,
   toDatabaseDate,
   unidadInputSchema,
   type ContratoInput,
-  type PropiedadInput,
+  type CancelacionContratoInput,
   type PropietarioInput,
+  type PropietarioSeleccionado,
   type UnidadInput,
 } from "@/lib/validation/foundation";
 
-export async function listarPropietarios() {
+type ClientePropietarios = Pick<typeof prisma, "propietario" | "usuarioSistema">;
+
+export type OpcionPropietario = {
+  value: string;
+  nombre: string;
+  detalle: string;
+};
+
+export async function listarOpcionesPropietario(): Promise<OpcionPropietario[]> {
   await requireSystemRole(WRITE_ROLES);
 
-  return prisma.propietario.findMany({
-    orderBy: { nombre: "asc" },
-    include: { _count: { select: { propiedades: true } } },
+  const [propietariosSinUsuario, usuarios] = await Promise.all([
+    prisma.propietario.findMany({
+      where: { usuarioSistemaId: null },
+      select: { id: true, nombre: true },
+    }),
+    prisma.usuarioSistema.findMany({
+      where: { puedeSerPropietario: true },
+      select: {
+        id: true,
+        activo: true,
+        perfil: { select: { nombreCompleto: true, razonSocial: true } },
+        propietario: { select: { id: true, nombre: true } },
+      },
+    }),
+  ]);
+
+  return [
+    ...propietariosSinUsuario.map((propietario) => ({
+      value: `propietario:${propietario.id}`,
+      nombre: propietario.nombre,
+      detalle: "Registro de propietario sin usuario asociado",
+    })),
+    ...usuarios.map((usuario) => ({
+      value: usuario.propietario
+        ? `propietario:${usuario.propietario.id}`
+        : `usuario:${usuario.id}`,
+      nombre:
+        usuario.perfil?.razonSocial ||
+        usuario.perfil?.nombreCompleto ||
+        usuario.propietario?.nombre ||
+        `Usuario ${usuario.id.slice(0, 8)}`,
+      detalle: usuario.activo ? "Usuario del sistema" : "Usuario sin acceso",
+    })),
+  ].sort((first, second) => first.nombre.localeCompare(second.nombre, "es-MX"));
+}
+
+export async function resolverPropietarioSeleccionado(
+  seleccion: PropietarioSeleccionado,
+  client: ClientePropietarios = prisma,
+) {
+  if (seleccion.tipo === "propietario") {
+    const propietario = await client.propietario.findUnique({
+      where: { id: seleccion.id },
+      select: { id: true },
+    });
+    if (!propietario) {
+      throw new DomainError("NOT_FOUND", "El propietario seleccionado no existe.");
+    }
+    return propietario.id;
+  }
+
+  const usuario = await client.usuarioSistema.findFirst({
+    where: { id: seleccion.id, puedeSerPropietario: true },
+    select: {
+      id: true,
+      perfil: { select: { nombreCompleto: true, razonSocial: true } },
+      propietario: { select: { id: true, nombre: true } },
+    },
   });
+  if (!usuario) {
+    throw new DomainError("NOT_FOUND", "El usuario seleccionado no existe.");
+  }
+  if (usuario.propietario) return usuario.propietario.id;
+
+  const nombre =
+    usuario.perfil?.razonSocial ||
+    usuario.perfil?.nombreCompleto ||
+    `Usuario ${usuario.id.slice(0, 8)}`;
+  const propietario = await client.propietario.create({
+    data: { usuarioSistemaId: usuario.id, nombre },
+    select: { id: true },
+  });
+  return propietario.id;
 }
 
 export async function obtenerPropietario(propietarioId: string) {
@@ -75,17 +155,17 @@ export async function eliminarPropietario(propietarioId: string) {
   const id = recordIdSchema.parse(propietarioId);
   const propietario = await prisma.propietario.findUnique({
     where: { id },
-    select: { _count: { select: { propiedades: true } } },
+    select: { _count: { select: { propiedades: true, unidades: true } } },
   });
 
   if (!propietario) {
     throw new DomainError("NOT_FOUND", "El propietario no existe.");
   }
 
-  if (propietario._count.propiedades > 0) {
+  if (propietario._count.propiedades > 0 || propietario._count.unidades > 0) {
     throw new DomainError(
       "OWNER_HAS_PROPERTIES",
-      "No se puede eliminar un propietario que tiene propiedades.",
+      "No se puede eliminar un propietario que tiene propiedades o unidades.",
     );
   }
 
@@ -98,7 +178,7 @@ export async function listarPropiedades({ archivadas = false }: { archivadas?: b
 
   return prisma.propiedad.findMany({
     where: {
-      propietarioId: ownerId ?? undefined,
+      unidades: ownerId ? { some: { propietarioId: ownerId } } : undefined,
       archivadaEn: archivadas ? { not: null } : null,
     },
     orderBy: { direccion: "asc" },
@@ -106,7 +186,7 @@ export async function listarPropiedades({ archivadas = false }: { archivadas?: b
       propietario: true,
       marca: true,
       archivos: { where: { tipo: "FOTO_PROPIEDAD" }, orderBy: { orden: "asc" }, take: 1 },
-      _count: { select: { unidades: true } },
+      _count: { select: { unidades: ownerId ? { where: { propietarioId: ownerId } } : true } },
     },
   });
 }
@@ -115,6 +195,7 @@ export async function obtenerPropiedad(propiedadId: string) {
   await requireSystemRole(READ_ROLES);
   const id = recordIdSchema.parse(propiedadId);
   await requirePropertyAccess(id);
+  const ownerId = await getOwnerScope();
 
   return prisma.propiedad.findUnique({
     where: { id },
@@ -122,29 +203,35 @@ export async function obtenerPropiedad(propiedadId: string) {
       propietario: true,
       marca: true,
       archivos: { where: { tipo: "FOTO_PROPIEDAD" }, orderBy: { orden: "asc" } },
-      unidades: { orderBy: { identificador: "asc" } },
+      unidades: { where: { propietarioId: ownerId ?? undefined }, orderBy: { identificador: "asc" }, include: { propietario: true } },
     },
   });
 }
 
-export async function crearPropiedad(input: PropiedadInput) {
+export async function crearPropiedad(input: unknown) {
   await requireSystemRole(WRITE_ROLES);
-  const data = propiedadInputSchema.parse(input);
+  const { propietarioId: seleccion, ...data } = propiedadConPropietarioSeleccionadoSchema.parse(input);
 
-  return prisma.propiedad.create({ data });
+  return prisma.$transaction(async (transaction) => {
+    const propietarioId = await resolverPropietarioSeleccionado(seleccion, transaction);
+    return transaction.propiedad.create({ data: { ...data, propietarioId } });
+  });
 }
 
 export async function actualizarPropiedad(
   propiedadId: string,
-  input: PropiedadInput,
+  input: unknown,
 ) {
   await requireSystemRole(WRITE_ROLES);
   const id = recordIdSchema.parse(propiedadId);
-  const data = propiedadInputSchema.parse(input);
+  const { propietarioId: seleccion, ...data } = propiedadConPropietarioSeleccionadoSchema.parse(input);
 
   await asegurarPropiedadActiva(id);
 
-  return prisma.propiedad.update({ where: { id }, data });
+  return prisma.$transaction(async (transaction) => {
+    const propietarioId = await resolverPropietarioSeleccionado(seleccion, transaction);
+    return transaction.propiedad.update({ where: { id }, data: { ...data, propietarioId } });
+  });
 }
 
 export async function archivarPropiedad(propiedadId: string) {
@@ -228,7 +315,7 @@ export async function listarUnidades(propiedadId: string) {
   await requirePropertyAccess(id);
 
   return prisma.unidad.findMany({
-    where: { propiedadId: id },
+    where: { propiedadId: id, propietarioId: (await getOwnerScope()) ?? undefined },
     orderBy: { identificador: "asc" },
     include: {
       medidorAgua: true,
@@ -243,9 +330,10 @@ export async function obtenerUnidad(unidadId: string) {
   const ownerId = await getOwnerScope();
 
   return prisma.unidad.findFirst({
-    where: { id, propiedad: ownerId ? { propietarioId: ownerId } : undefined },
+    where: { id, propietarioId: ownerId ?? undefined },
     include: {
       propiedad: { include: { propietario: true } },
+      propietario: true,
       medidorAgua: true,
       contratos: {
         orderBy: { fechaInicio: "desc" },
@@ -260,33 +348,41 @@ export async function obtenerUnidad(unidadId: string) {
   });
 }
 
-export async function crearUnidad(input: UnidadInput) {
+export async function crearUnidad(input: unknown) {
   await requireSystemRole(WRITE_ROLES);
-  const data = unidadInputSchema.parse(input);
+  const { propietarioId: seleccion, ...data } = unidadInputSchema.parse(input);
   await asegurarPropiedadActiva(data.propiedadId);
 
-  return prisma.unidad.create({
-    data: {
-      ...data,
-      atributos: normalizarAtributos(data.atributos),
-      amenidades: normalizarAtributos(data.amenidades),
-    },
+  return prisma.$transaction(async (transaction) => {
+    const propietarioId = await resolverPropietarioSeleccionado(seleccion, transaction);
+    return transaction.unidad.create({
+      data: {
+        ...data,
+        propietarioId,
+        atributos: normalizarAtributos(data.atributos),
+        amenidades: normalizarAtributos(data.amenidades),
+      },
+    });
   });
 }
 
-export async function actualizarUnidad(unidadId: string, input: UnidadInput) {
+export async function actualizarUnidad(unidadId: string, input: unknown) {
   await requireSystemRole(WRITE_ROLES);
   const id = recordIdSchema.parse(unidadId);
-  const data = unidadInputSchema.parse(input);
+  const { propietarioId: seleccion, ...data } = unidadInputSchema.parse(input);
   await asegurarPropiedadActiva(data.propiedadId);
 
-  return prisma.unidad.update({
-    where: { id },
-    data: {
-      ...data,
-      atributos: normalizarAtributos(data.atributos),
-      amenidades: normalizarAtributos(data.amenidades),
-    },
+  return prisma.$transaction(async (transaction) => {
+    const propietarioId = await resolverPropietarioSeleccionado(seleccion, transaction);
+    return transaction.unidad.update({
+      where: { id },
+      data: {
+        ...data,
+        propietarioId,
+        atributos: normalizarAtributos(data.atributos),
+        amenidades: normalizarAtributos(data.amenidades),
+      },
+    });
   });
 }
 
@@ -326,7 +422,7 @@ export async function listarContratos(unidadId?: string) {
   const ownerId = await getOwnerScope();
 
   return prisma.contrato.findMany({
-    where: { unidadId: parsedUnidadId, unidad: ownerId ? { propiedad: { propietarioId: ownerId } } : undefined },
+    where: { unidadId: parsedUnidadId, unidad: ownerId ? { propietarioId: ownerId } : undefined },
     orderBy: { fechaInicio: "desc" },
     include: {
       unidad: { include: { propiedad: true } },
@@ -341,7 +437,7 @@ export async function obtenerContrato(contratoId: string) {
   const ownerId = await getOwnerScope();
 
   return prisma.contrato.findFirst({
-    where: { id, unidad: ownerId ? { propiedad: { propietarioId: ownerId } } : undefined },
+    where: { id, unidad: ownerId ? { propietarioId: ownerId } : undefined },
     include: {
       unidad: { include: { propiedad: { include: { propietario: true } } } },
       recibos: {
@@ -356,6 +452,9 @@ export async function obtenerContrato(contratoId: string) {
 export async function crearContrato(input: ContratoInput) {
   const { user } = await requireSystemRole(WRITE_ROLES);
   const data = contratoInputSchema.parse(input);
+  if (data.estado === EstadoContrato.CANCELADO) {
+    throw new DomainError("INVALID_CONTRACT_STATE", "Un contrato nuevo no puede crearse como cancelado.");
+  }
   await asegurarUnidadEnPropiedadActiva(data.unidadId);
 
   if (data.estado === EstadoContrato.ACTIVO) {
@@ -365,11 +464,12 @@ export async function crearContrato(input: ContratoInput) {
   const startDate = toDatabaseDate(data.fechaInicio);
   const endDate = toDatabaseDate(data.fechaFin);
   const period = currentReceiptPeriod();
+  const guarantee = normalizarGarantia(data);
 
   return prisma.$transaction(async (transaction) => {
     const contract = await transaction.contrato.create({
       data: {
-        ...data,
+        ...guarantee,
         fechaInicio: startDate,
         fechaFin: endDate,
       },
@@ -408,16 +508,19 @@ export async function actualizarContrato(
   const { user } = await requireSystemRole(WRITE_ROLES);
   const id = recordIdSchema.parse(contratoId);
   const data = contratoInputSchema.parse(input);
+  const before = await prisma.contrato.findUnique({ where: { id } });
+  if (!before) throw new DomainError("NOT_FOUND", "El contrato no existe.");
+  if (before.estado === EstadoContrato.CANCELADO) throw new DomainError("CONTRACT_CANCELLED", "Un contrato cancelado no se puede editar.");
+  if (data.estado === EstadoContrato.CANCELADO) throw new DomainError("INVALID_CONTRACT_STATE", "Usa la acción de cancelación para registrar la fecha y el motivo.");
   await asegurarUnidadEnPropiedadActiva(data.unidadId);
 
   if (data.estado === EstadoContrato.ACTIVO) {
     await asegurarUnidadSinContratoActivo(data.unidadId, id);
   }
 
-  const before = await prisma.contrato.findUnique({ where: { id } });
-  if (!before) throw new DomainError("NOT_FOUND", "El contrato no existe.");
+  const guarantee = normalizarGarantia(data);
   return prisma.$transaction(async (tx) => {
-    const updated = await tx.contrato.update({ where: { id }, data: { ...data, fechaInicio: toDatabaseDate(data.fechaInicio), fechaFin: toDatabaseDate(data.fechaFin) } });
+    const updated = await tx.contrato.update({ where: { id }, data: { ...guarantee, fechaInicio: toDatabaseDate(data.fechaInicio), fechaFin: toDatabaseDate(data.fechaFin) } });
     await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "ACTUALIZAR", entidad: "Contrato", entidadId: id, antes: { estado: before.estado, fechaInicio: before.fechaInicio.toISOString(), fechaFin: before.fechaFin.toISOString(), rentaMensualBase: before.rentaMensualBase.toString(), diaPago: before.diaPago }, despues: { estado: updated.estado, fechaInicio: updated.fechaInicio.toISOString(), fechaFin: updated.fechaFin.toISOString(), rentaMensualBase: updated.rentaMensualBase.toString(), diaPago: updated.diaPago } });
     return updated;
   });
@@ -426,14 +529,56 @@ export async function actualizarContrato(
 export async function vencerContrato(contratoId: string) {
   const { user } = await requireSystemRole(WRITE_ROLES);
   const id = recordIdSchema.parse(contratoId);
-  const contract = await prisma.contrato.findUnique({ where: { id }, select: { unidadId: true } });
+  const contract = await prisma.contrato.findUnique({ where: { id }, select: { unidadId: true, estado: true } });
   if (!contract) throw new DomainError("NOT_FOUND", "El contrato no existe.");
+  if (contract.estado !== EstadoContrato.ACTIVO) throw new DomainError("CONTRACT_NOT_ACTIVE", "Solo se puede vencer un contrato activo.");
   await asegurarUnidadEnPropiedadActiva(contract.unidadId);
 
   return prisma.$transaction(async (tx) => {
     const updated = await tx.contrato.update({ where: { id }, data: { estado: EstadoContrato.VENCIDO } });
     await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "VENCER", entidad: "Contrato", entidadId: id, antes: { estado: EstadoContrato.ACTIVO }, despues: { estado: EstadoContrato.VENCIDO } });
     return updated;
+  });
+}
+
+export async function cancelarContrato(
+  contratoId: string,
+  input: CancelacionContratoInput,
+  now = currentCollectionDate(),
+) {
+  const { user } = await requireSystemRole(WRITE_ROLES);
+  const id = recordIdSchema.parse(contratoId);
+  const data = cancelacionContratoInputSchema.parse(input);
+  const fechaCancelacion = toDatabaseDate(data.fechaCancelacion);
+  const contract = await prisma.contrato.findUnique({
+    where: { id },
+    select: { unidadId: true, estado: true, fechaInicio: true, fechaFin: true },
+  });
+  if (!contract) throw new DomainError("NOT_FOUND", "El contrato no existe.");
+  if (contract.estado !== EstadoContrato.ACTIVO) throw new DomainError("CONTRACT_NOT_ACTIVE", "Solo se puede cancelar un contrato activo.");
+  if (!isCancellationDateAllowed({ cancellationDate: fechaCancelacion, startDate: contract.fechaInicio, endDate: contract.fechaFin, today: now })) {
+    throw new DomainError("INVALID_CANCELLATION_DATE", "La fecha de cancelación debe estar dentro de la vigencia y no puede ser futura.");
+  }
+  await asegurarUnidadEnPropiedadActiva(contract.unidadId);
+
+  return prisma.$transaction(async (tx) => {
+    const cancelled = await tx.contrato.update({
+      where: { id },
+      data: {
+        estado: EstadoContrato.CANCELADO,
+        canceladoEn: fechaCancelacion,
+        motivoCancelacion: data.motivoCancelacion,
+      },
+    });
+    await registrarAuditoria(tx, {
+      usuarioSistemaId: user.id,
+      accion: "CANCELAR",
+      entidad: "Contrato",
+      entidadId: id,
+      antes: { estado: EstadoContrato.ACTIVO },
+      despues: { estado: EstadoContrato.CANCELADO, canceladoEn: cancelled.canceladoEn?.toISOString() ?? null },
+    });
+    return cancelled;
   });
 }
 
@@ -482,5 +627,19 @@ function normalizarAtributos(value: UnidadInput["atributos"] | UnidadInput["amen
   }
 
   return value;
+}
+
+function normalizarGarantia(data: ContratoInput) {
+  const isPagare = data.tipoGarantia === "PAGARE";
+  return {
+    ...data,
+    valorGarantia: data.tipoGarantia === "PRENDA" ? data.valorGarantia ?? null : null,
+    avalTelefono: data.tipoGarantia === "AVAL" ? data.avalTelefono ?? null : null,
+    avalCorreo: data.tipoGarantia === "AVAL" ? data.avalCorreo ?? null : null,
+    pagareMonto: isPagare ? data.pagareMonto ?? null : null,
+    pagareFechaEmision: isPagare && data.pagareFechaEmision ? toDatabaseDate(data.pagareFechaEmision) : null,
+    pagareFechaVencimiento: isPagare && data.pagareFechaVencimiento ? toDatabaseDate(data.pagareFechaVencimiento) : null,
+    pagareLugarPago: isPagare ? data.pagareLugarPago ?? null : null,
+  };
 }
 

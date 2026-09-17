@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
 import { prisma } from "@/lib/db/prisma";
 import { eliminarFotosBlob, propertyPhotoUploadsFromFormData } from "@/lib/property-photos";
-import { propiedadInputSchema } from "@/lib/validation/foundation";
+import { resolverPropietarioSeleccionado } from "@/lib/services/foundation";
+import { propiedadConPropietarioSeleccionadoSchema } from "@/lib/validation/foundation";
 import { isSameOrigin, safeRouteError } from "@/lib/http/route-security";
 
 function formValue(form: FormData, key: string) {
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
   try {
     await requireSystemRole(WRITE_ROLES);
     const form = await request.formData();
-    const data = propiedadInputSchema.parse({
+    const { propietarioId: seleccion, ...data } = propiedadConPropietarioSeleccionadoSchema.parse({
       propietarioId: String(form.get("propietarioId") ?? ""),
       marcaId: formValue(form, "marcaId"),
       direccion: String(form.get("direccion") ?? ""),
@@ -37,7 +38,8 @@ export async function POST(request: Request) {
     photos = propertyPhotoUploadsFromFormData(form);
 
     const property = await prisma.$transaction(async (transaction) => {
-      const created = await transaction.propiedad.create({ data });
+      const propietarioId = await resolverPropietarioSeleccionado(seleccion, transaction);
+      const created = await transaction.propiedad.create({ data: { ...data, propietarioId } });
 
       if (photos.length > 0) {
         await transaction.archivoExpediente.createMany({

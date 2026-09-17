@@ -103,7 +103,7 @@ export async function sincronizarCobranzaSistema(now = new Date()) {
     where: {
       estatus: EstadoRecibo.PENDIENTE,
       fechaVencimiento: { lt: currentDate },
-      contrato: { unidad: { propiedad: { archivadaEn: null } } },
+      contrato: { estado: EstadoContrato.ACTIVO, unidad: { propiedad: { archivadaEn: null } } },
     },
     data: { estatus: EstadoRecibo.VENCIDO },
   });
@@ -112,7 +112,7 @@ export async function sincronizarCobranzaSistema(now = new Date()) {
     where: {
       estatus: EstadoRecibo.VENCIDO,
       fechaVencimiento: { gte: currentDate },
-      contrato: { unidad: { propiedad: { archivadaEn: null } } },
+      contrato: { estado: EstadoContrato.ACTIVO, unidad: { propiedad: { archivadaEn: null } } },
     },
     data: { estatus: EstadoRecibo.PENDIENTE },
   });
@@ -136,7 +136,7 @@ export async function listarCobranzaMensual({
   await requireSystemRole(READ_ROLES);
   const ownerId = await getOwnerScope();
   const receipts = await prisma.recibo.findMany({
-    where: { periodo: period, estatus: status, contrato: ownerId ? { unidad: { propiedad: { propietarioId: ownerId } } } : undefined },
+    where: { periodo: period, estatus: status, contrato: ownerId ? { unidad: { propietarioId: ownerId } } : undefined },
     orderBy: [
       { contrato: { unidad: { propiedad: { direccion: "asc" } } } },
       { contrato: { unidad: { identificador: "asc" } } },
@@ -159,7 +159,7 @@ export async function listarCobranzaMensual({
 
   const allReceipts = status
     ? await prisma.recibo.findMany({
-      where: { periodo: period, contrato: ownerId ? { unidad: { propiedad: { propietarioId: ownerId } } } : undefined },
+      where: { periodo: period, contrato: ownerId ? { unidad: { propietarioId: ownerId } } : undefined },
       include: { pagos: true },
     })
     : receipts;

@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 import { EstadoContrato, TipoGarantia, TipoUnidad } from "@/generated/prisma/enums";
+import { hasValidPagareDetails } from "@/lib/contracts";
+import { normalizeCurrencyInput } from "@/lib/format";
 
 const requiredText = z
   .string()
@@ -10,10 +12,33 @@ const requiredText = z
 const uuid = z.uuid();
 const date = z.iso.date();
 
-const money = z
+export const propietarioSeleccionSchema = z
   .string()
   .trim()
-  .regex(/^\d{1,12}(?:\.\d{1,2})?$/, "Captura un importe válido.");
+  .transform((value, context) => {
+    const separatorIndex = value.indexOf(":");
+    const kind = separatorIndex >= 0 ? value.slice(0, separatorIndex) : "propietario";
+    const id = separatorIndex >= 0 ? value.slice(separatorIndex + 1) : value;
+    const parsedId = uuid.safeParse(id);
+
+    if (
+      !parsedId.success ||
+      (kind !== "propietario" && kind !== "usuario")
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Selecciona un propietario válido.",
+      });
+      return z.NEVER;
+    }
+
+    return { tipo: kind as "propietario" | "usuario", id: parsedId.data };
+  });
+
+const money = z.preprocess(
+  normalizeCurrencyInput,
+  z.string().regex(/^\d{1,12}(?:\.\d{1,2})?$/, "Captura un importe válido."),
+);
 
 const coordinate = z
   .string()
@@ -55,39 +80,49 @@ export const usuarioAdministradorInputSchema = z.object({
   neonAuthUserId: z.string().trim().min(1).max(255),
 });
 
-export const propiedadInputSchema = z
-  .object({
-    propietarioId: uuid,
-    marcaId: uuid.nullable().optional(),
-    direccion: requiredText.max(500),
-    googlePlaceId: z.string().trim().max(255).nullable().optional(),
-    latitud: coordinate,
-    longitud: coordinate,
-    valorCatastral: money,
-    valorComercialTotal: money,
-    predialAnual: money,
-    mantenimientoAnual: money,
-  })
-  .superRefine((input, context) => {
-    if ((input.latitud === null) !== (input.longitud === null)) {
-      context.addIssue({
-        code: "custom",
-        message: "Selecciona nuevamente la ubicación en el mapa.",
-        path: ["direccion"],
-      });
-    }
+const propiedadBaseSchema = z.object({
+  propietarioId: uuid,
+  marcaId: uuid.nullable().optional(),
+  direccion: requiredText.max(500),
+  googlePlaceId: z.string().trim().max(255).nullable().optional(),
+  latitud: coordinate,
+  longitud: coordinate,
+  valorCatastral: money,
+  valorComercialTotal: money,
+  predialAnual: money,
+  mantenimientoAnual: money,
+});
 
-    if (input.latitud !== null && Math.abs(Number(input.latitud)) > 90) {
-      context.addIssue({ code: "custom", message: "La latitud no es válida.", path: ["latitud"] });
-    }
+function validatePropertyCoordinates(
+  input: { direccion: string; latitud?: string | null; longitud?: string | null },
+  context: z.RefinementCtx,
+) {
+  if ((input.latitud === null) !== (input.longitud === null)) {
+    context.addIssue({
+      code: "custom",
+      message: "Selecciona nuevamente la ubicación en el mapa.",
+      path: ["direccion"],
+    });
+  }
 
-    if (input.longitud !== null && Math.abs(Number(input.longitud)) > 180) {
-      context.addIssue({ code: "custom", message: "La longitud no es válida.", path: ["longitud"] });
-    }
-  });
+  if (input.latitud !== null && input.latitud !== undefined && Math.abs(Number(input.latitud)) > 90) {
+    context.addIssue({ code: "custom", message: "La latitud no es válida.", path: ["latitud"] });
+  }
+
+  if (input.longitud !== null && input.longitud !== undefined && Math.abs(Number(input.longitud)) > 180) {
+    context.addIssue({ code: "custom", message: "La longitud no es válida.", path: ["longitud"] });
+  }
+}
+
+export const propiedadInputSchema = propiedadBaseSchema.superRefine(validatePropertyCoordinates);
+
+export const propiedadConPropietarioSeleccionadoSchema = propiedadBaseSchema
+  .extend({ propietarioId: propietarioSeleccionSchema })
+  .superRefine(validatePropertyCoordinates);
 
 export const unidadInputSchema = z.object({
   propiedadId: uuid,
+  propietarioId: propietarioSeleccionSchema,
   identificador: requiredText.max(100),
   tipo: z.enum(TipoUnidad),
   metrosCuadrados: positiveArea,
@@ -109,6 +144,10 @@ export const contratoInputSchema = z
     aval: requiredText,
     tipoGarantia: z.enum(TipoGarantia).default(TipoGarantia.AVAL),
     valorGarantia: money.nullable().optional(),
+    pagareMonto: money.nullable().optional(),
+    pagareFechaEmision: date.nullable().optional(),
+    pagareFechaVencimiento: date.nullable().optional(),
+    pagareLugarPago: z.string().trim().max(250).nullable().optional(),
     fechaInicio: date,
     plazoMeses: z.coerce.number().int().positive().max(1_200),
     fechaFin: date,
@@ -131,7 +170,24 @@ export const contratoInputSchema = z
     if (input.tipoGarantia === TipoGarantia.PRENDA && !input.valorGarantia) {
       context.addIssue({ code: "custom", message: "Captura la valuación de la prenda.", path: ["valorGarantia"] });
     }
+    if (input.tipoGarantia === TipoGarantia.PAGARE) {
+      const validPagare = hasValidPagareDetails({ amount: input.pagareMonto, issueDate: input.pagareFechaEmision, dueDate: input.pagareFechaVencimiento, paymentPlace: input.pagareLugarPago });
+      if (!validPagare) {
+        if (!input.pagareMonto) context.addIssue({ code: "custom", message: "Captura el importe del pagaré.", path: ["pagareMonto"] });
+        if (!input.pagareFechaEmision) context.addIssue({ code: "custom", message: "Captura la fecha de emisión del pagaré.", path: ["pagareFechaEmision"] });
+        if (!input.pagareFechaVencimiento) context.addIssue({ code: "custom", message: "Captura la fecha de vencimiento del pagaré.", path: ["pagareFechaVencimiento"] });
+        if (!input.pagareLugarPago) context.addIssue({ code: "custom", message: "Captura el lugar de pago del pagaré.", path: ["pagareLugarPago"] });
+        if (input.pagareFechaEmision && input.pagareFechaVencimiento && input.pagareFechaVencimiento < input.pagareFechaEmision) {
+          context.addIssue({ code: "custom", message: "El vencimiento del pagaré debe ser posterior a su emisión.", path: ["pagareFechaVencimiento"] });
+        }
+      }
+    }
   });
+
+export const cancelacionContratoInputSchema = z.object({
+  fechaCancelacion: date,
+  motivoCancelacion: z.string().trim().min(3, "Captura el motivo de cancelación.").max(2_000),
+});
 
 export const recordIdSchema = uuid;
 
@@ -139,8 +195,10 @@ export type PropietarioInput = z.infer<typeof propietarioInputSchema>;
 export type PerfilUsuarioInput = z.infer<typeof perfilUsuarioInputSchema>;
 export type UsuarioAdministradorInput = z.infer<typeof usuarioAdministradorInputSchema>;
 export type PropiedadInput = z.infer<typeof propiedadInputSchema>;
+export type PropietarioSeleccionado = z.infer<typeof propietarioSeleccionSchema>;
 export type UnidadInput = z.infer<typeof unidadInputSchema>;
 export type ContratoInput = z.infer<typeof contratoInputSchema>;
+export type CancelacionContratoInput = z.infer<typeof cancelacionContratoInputSchema>;
 
 export function toDatabaseDate(value: string) {
   return new Date(`${value}T00:00:00.000Z`);

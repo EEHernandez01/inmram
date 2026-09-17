@@ -15,7 +15,7 @@ export async function generarReciboPdf(receiptId: string) {
   const { user, session } = await requireSystemRole(READ_ROLES);
   const ownerId = await getOwnerScope();
   const id = recordIdSchema.parse(receiptId);
-  const receipt = await prisma.recibo.findFirst({ where: { id, contrato: ownerId ? { unidad: { propiedad: { propietarioId: ownerId } } } : undefined }, include: { contrato: { include: { unidad: { include: { propiedad: true } } } }, pagos: { where: { anuladoEn: null } } } });
+  const receipt = await prisma.recibo.findFirst({ where: { id, contrato: ownerId ? { unidad: { propietarioId: ownerId } } : undefined }, include: { contrato: { include: { unidad: { include: { propiedad: true } } } }, pagos: { where: { anuladoEn: null } } } });
   if (!receipt) throw new DomainError("NOT_FOUND", "El recibo no existe.");
   const servicesCharge = Number(receipt.cargoFijo);
   const total = calculateReceiptTotal({ rent: Number(receipt.monto), servicesCharge });
@@ -86,7 +86,7 @@ export async function generarComprobantePagoPdf(receiptId: string) {
   const { user, session } = await requireSystemRole(READ_ROLES);
   const ownerId = await getOwnerScope();
   const id = recordIdSchema.parse(receiptId);
-  const receipt = await prisma.recibo.findFirst({ where: { id, contrato: ownerId ? { unidad: { propiedad: { propietarioId: ownerId } } } : undefined }, include: { contrato: { include: { unidad: { include: { propiedad: true } } } } } });
+  const receipt = await prisma.recibo.findFirst({ where: { id, contrato: ownerId ? { unidad: { propietarioId: ownerId } } : undefined }, include: { contrato: { include: { unidad: { include: { propiedad: true } } } } } });
   if (!receipt) throw new DomainError("NOT_FOUND", "El recibo no existe.");
   if (receipt.estatus !== "PAGADO" || !receipt.fechaPago) throw new DomainError("INVALID_STATE", "El comprobante solo se puede generar para un recibo pagado.");
   const total = calculateReceiptTotal({

@@ -1,8 +1,24 @@
-export function formatCurrency(value: { toString(): string } | string | number) {
-  return new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: "MXN",
-  }).format(Number(value));
+type NumericValue = { toString(): string } | string | number;
+
+export function normalizeCurrencyInput(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .replace(/^MXN\$\s*/i, "")
+    .replaceAll("$", "")
+    .replaceAll(",", "")
+    .trim();
+}
+
+export function formatCurrency(value: NumericValue, fractionDigits = 2) {
+  return `MXN$ ${new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(Number(value))}`;
+}
+
+export function formatCurrencyInput(value: NumericValue | null | undefined, fractionDigits = 2) {
+  const normalized = normalizeCurrencyInput(value);
+  return normalized ? formatCurrency(normalized, fractionDigits) : "";
 }
 
 export function formatDate(value: Date) {
