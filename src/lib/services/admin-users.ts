@@ -9,7 +9,6 @@ import { z } from "zod";
 const userInputSchema = z.object({
   neonAuthUserId: z.string().trim().min(1).max(255),
   rol: z.enum(RolUsuario),
-  propietarioId: z.uuid().nullable().optional(),
   nombreCompleto: z.string().trim().min(1).max(250),
 });
 
@@ -25,21 +24,9 @@ export async function registrarUsuario(input: unknown) {
     ...(input as Record<string, unknown>),
     rol: normalizarRolLegacy((input as { rol?: unknown }).rol),
   });
-  const data = { ...parsed, propietarioId: parsed.rol === RolUsuario.PROPIETARIO ? parsed.propietarioId : null };
-  if (data.rol === RolUsuario.PROPIETARIO && !data.propietarioId) throw new Error("Selecciona el propietario vinculado.");
+  const data = parsed;
 
   return prisma.$transaction(async (tx) => {
-    const existingUser = await tx.usuarioSistema.findUnique({
-      where: { neonAuthUserId: data.neonAuthUserId },
-      select: { id: true },
-    });
-    if (data.propietarioId) {
-      const owner = await tx.propietario.findUnique({ where: { id: data.propietarioId } });
-      if (!owner) throw new Error("El propietario seleccionado no existe.");
-      if (owner.usuarioSistemaId && owner.usuarioSistemaId !== existingUser?.id) {
-        throw new Error("El propietario ya tiene una cuenta vinculada.");
-      }
-    }
     const registered = await tx.usuarioSistema.upsert({
       where: { neonAuthUserId: data.neonAuthUserId },
       create: {
@@ -54,43 +41,33 @@ export async function registrarUsuario(input: unknown) {
         perfil: { upsert: { create: { nombreCompleto: data.nombreCompleto }, update: { nombreCompleto: data.nombreCompleto } } },
       },
     });
-    await tx.propietario.updateMany({
-      where: { usuarioSistemaId: registered.id, id: data.propietarioId ? { not: data.propietarioId } : undefined },
-      data: { usuarioSistemaId: null },
-    });
-    if (data.propietarioId) await tx.propietario.update({ where: { id: data.propietarioId }, data: { usuarioSistemaId: registered.id } });
-    await registrarAuditoria(tx, { usuarioSistemaId: actor.id, accion: "CREAR_USUARIO", entidad: "UsuarioSistema", entidadId: registered.id, despues: { rol: registered.rol, propietarioId: data.propietarioId ?? null } });
+    const propietario = data.rol === RolUsuario.PROPIETARIO
+      ? await tx.propietario.upsert({ where: { usuarioSistemaId: registered.id }, create: { usuarioSistemaId: registered.id, nombre: data.nombreCompleto }, update: {} })
+      : null;
+    await registrarAuditoria(tx, { usuarioSistemaId: actor.id, accion: "CREAR_USUARIO", entidad: "UsuarioSistema", entidadId: registered.id, despues: { rol: registered.rol, propietarioId: propietario?.id ?? null } });
     return registered;
   });
 }
 
 export async function actualizarUsuarioSistema(id: string, input: unknown) {
   const { user: actor } = await requireSystemRole(ADMIN_ROLES);
-  const parsed = z.object({ rol: z.enum(RolUsuario), activo: z.boolean(), propietarioId: z.uuid().nullable().optional() }).parse({
+  const data = z.object({ rol: z.enum(RolUsuario), activo: z.boolean() }).parse({
     ...(input as Record<string, unknown>),
     rol: normalizarRolLegacy((input as { rol?: unknown }).rol),
   });
-  const data = { ...parsed, propietarioId: parsed.rol === RolUsuario.PROPIETARIO ? parsed.propietarioId : null };
-  const target = await prisma.usuarioSistema.findUnique({ where: { id }, include: { propietario: true } });
+  const target = await prisma.usuarioSistema.findUnique({ where: { id }, include: { perfil: true, propietario: true } });
   if (!target) throw new Error("Usuario no encontrado.");
   if (target.id === actor.id && !data.activo) throw new Error("No puedes desactivar tu propia cuenta.");
   if (target.rol === RolUsuario.ADMINISTRADOR && (!data.activo || data.rol !== RolUsuario.ADMINISTRADOR)) {
     const activeAdmins = await prisma.usuarioSistema.count({ where: { rol: RolUsuario.ADMINISTRADOR, activo: true } });
     if (activeAdmins <= 1) throw new Error("Debe permanecer un administrador activo.");
   }
-  if (data.rol === RolUsuario.PROPIETARIO && !data.propietarioId) throw new Error("Un propietario requiere vínculo con su registro.");
   return prisma.$transaction(async (tx) => {
-    if (data.propietarioId) {
-      const owner = await tx.propietario.findUnique({ where: { id: data.propietarioId } });
-      if (!owner) throw new Error("El propietario seleccionado no existe.");
-      if (owner.usuarioSistemaId && owner.usuarioSistemaId !== target.id) {
-        throw new Error("El propietario ya tiene una cuenta vinculada.");
-      }
-    }
-    if (target.propietario && target.propietario.id !== data.propietarioId) await tx.propietario.update({ where: { id: target.propietario.id }, data: { usuarioSistemaId: null } });
-    if (data.propietarioId) await tx.propietario.update({ where: { id: data.propietarioId }, data: { usuarioSistemaId: id } });
-    const updated = await tx.usuarioSistema.update({ where: { id }, data: { rol: data.rol, activo: data.activo } });
-    await registrarAuditoria(tx, { usuarioSistemaId: actor.id, accion: "ACTUALIZAR_USUARIO", entidad: "UsuarioSistema", entidadId: id, antes: { rol: target.rol, activo: target.activo }, despues: { rol: updated.rol, activo: updated.activo, propietarioId: data.propietarioId ?? null } });
+    const updated = await tx.usuarioSistema.update({ where: { id }, data });
+    const propietario = data.rol === RolUsuario.PROPIETARIO
+      ? await tx.propietario.upsert({ where: { usuarioSistemaId: id }, create: { usuarioSistemaId: id, nombre: target.perfil?.nombreCompleto ?? `Usuario ${id.slice(0, 8)}` }, update: {} })
+      : target.propietario;
+    await registrarAuditoria(tx, { usuarioSistemaId: actor.id, accion: "ACTUALIZAR_USUARIO", entidad: "UsuarioSistema", entidadId: id, antes: { rol: target.rol, activo: target.activo }, despues: { rol: updated.rol, activo: updated.activo, propietarioId: propietario?.id ?? null } });
     return updated;
   });
 }
