@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/form-controls";
 type AddressParts = {
   calle: string;
   numero: string;
+  numeroInterior: string;
   colonia: string;
   municipio: string;
   ciudad: string;
@@ -94,6 +95,7 @@ type AddressComponent = {
 const emptyAddressParts: AddressParts = {
   calle: "",
   numero: "",
+  numeroInterior: "",
   colonia: "",
   municipio: "",
   ciudad: "",
@@ -166,6 +168,7 @@ function addressPartsFromPlace(place: Place): AddressParts {
   return {
     calle: componentText(findComponent(components, "route")),
     numero: componentText(findComponent(components, "street_number")),
+    numeroInterior: componentText(findComponent(components, "subpremise")),
     colonia:
       componentText(findComponent(components, "neighborhood")) ||
       componentText(findComponent(components, "sublocality_level_1")) ||
@@ -178,7 +181,11 @@ function addressPartsFromPlace(place: Place): AddressParts {
 }
 
 function formatAddress(parts: AddressParts, fallback = "") {
-  const street = [parts.calle, parts.numero].filter(Boolean).join(" ");
+  const street = [
+    parts.calle,
+    parts.numero,
+    parts.numeroInterior ? `Int. ${parts.numeroInterior}` : "",
+  ].filter(Boolean).join(" ");
   const address = [
     street,
     parts.colonia,
@@ -407,6 +414,10 @@ export function LocationPicker({ defaults, enabled }: { defaults?: LocationDefau
         <label className="block space-y-2 text-sm font-semibold text-ink">
           <span>Numero exterior</span>
           <Input autoComplete="address-line2" maxLength={50} onChange={(event) => updateAddressPart("numero", event.target.value)} value={addressParts.numero} />
+        </label>
+        <label className="block space-y-2 text-sm font-semibold text-ink">
+          <span>Numero interior</span>
+          <Input autoComplete="address-line2" maxLength={50} onChange={(event) => updateAddressPart("numeroInterior", event.target.value)} value={addressParts.numeroInterior} />
         </label>
         <label className="block space-y-2 text-sm font-semibold text-ink">
           <span>Colonia</span>
