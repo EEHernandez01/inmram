@@ -68,7 +68,7 @@ export function UnitForm({ defaults, owners, propertyId, submitLabel, unitId }: 
         <Textarea defaultValue={defaults?.descripcion ?? ""} maxLength={2000} name="descripcion" rows={4} />
       </Field>
       <Field label="Amenidades" hint="Separadas por coma; ej. estacionamiento, balcón, elevador">
-        <div className="grid grid-cols-2 gap-2 text-sm font-normal sm:grid-cols-3">{["Estacionamiento", "Balcón", "Elevador", "Terraza", "Roof garden"].map((item) => <label className="flex items-center gap-2 rounded-lg bg-bg px-3 py-2" key={item}><input defaultChecked={defaults?.amenidades?.split(", ").includes(item)} name="amenidades" type="checkbox" value={item} />{item}</label>)}</div>
+        <div className="grid grid-cols-2 gap-2 text-sm font-normal sm:grid-cols-3">{["Estacionamiento", "Balcón", "Elevador", "Terraza", "Roof garden", "Cuarto de servicio", "Baño de servicio"].map((item) => <label className="flex items-center gap-2 rounded-lg bg-bg px-3 py-2" key={item}><input defaultChecked={defaults?.amenidades?.split(", ").includes(item)} name="amenidades" type="checkbox" value={item} />{item}</label>)}</div>
       </Field>
       <FormStatus message={undefined} />
       <Button type="submit">
