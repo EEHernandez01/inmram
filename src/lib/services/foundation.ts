@@ -3,6 +3,7 @@ import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import { EstadoContrato } from "@/generated/prisma/enums";
 import {
+  ADMIN_ROLES,
   READ_ROLES,
   getOwnerScope,
   requirePropertyAccess,
@@ -36,7 +37,7 @@ import {
   type UnidadInput,
 } from "@/lib/validation/foundation";
 
-type ClientePropietarios = Pick<typeof prisma, "propietario" | "usuarioSistema">;
+type ClientePropietarios = Pick<typeof prisma, "propietario">;
 
 export type OpcionPropietario = {
   value: string;
@@ -47,129 +48,103 @@ export type OpcionPropietario = {
 export async function listarOpcionesPropietario(): Promise<OpcionPropietario[]> {
   await requireSystemRole(WRITE_ROLES);
 
-  const [propietariosSinUsuario, usuarios] = await Promise.all([
-    prisma.propietario.findMany({
-      where: { usuarioSistemaId: null },
-      select: { id: true, nombre: true },
-    }),
-    prisma.usuarioSistema.findMany({
-      where: { puedeSerPropietario: true },
-      select: {
-        id: true,
-        activo: true,
-        perfil: { select: { nombreCompleto: true, razonSocial: true } },
-        propietario: { select: { id: true, nombre: true } },
-      },
-    }),
-  ]);
+  const propietarios = await prisma.propietario.findMany({
+    orderBy: { nombre: "asc" },
+    select: { id: true, nombre: true, telefono: true, correo: true },
+  });
 
-  return [
-    ...propietariosSinUsuario.map((propietario) => ({
-      value: `propietario:${propietario.id}`,
-      nombre: propietario.nombre,
-      detalle: "Registro de propietario sin usuario asociado",
-    })),
-    ...usuarios.map((usuario) => ({
-      value: usuario.propietario
-        ? `propietario:${usuario.propietario.id}`
-        : `usuario:${usuario.id}`,
-      nombre:
-        usuario.perfil?.razonSocial ||
-        usuario.perfil?.nombreCompleto ||
-        usuario.propietario?.nombre ||
-        `Usuario ${usuario.id.slice(0, 8)}`,
-      detalle: usuario.activo ? "Usuario del sistema" : "Usuario sin acceso",
-    })),
-  ].sort((first, second) => first.nombre.localeCompare(second.nombre, "es-MX"));
+  return propietarios.map((propietario) => ({
+    value: propietario.id,
+    nombre: propietario.nombre,
+    detalle: propietario.correo || propietario.telefono || "Sin datos de contacto",
+  }));
 }
 
 export async function resolverPropietarioSeleccionado(
   seleccion: PropietarioSeleccionado,
   client: ClientePropietarios = prisma,
 ) {
-  if (seleccion.tipo === "propietario") {
-    const propietario = await client.propietario.findUnique({
-      where: { id: seleccion.id },
-      select: { id: true },
-    });
-    if (!propietario) {
-      throw new DomainError("NOT_FOUND", "El propietario seleccionado no existe.");
-    }
-    return propietario.id;
-  }
-
-  const usuario = await client.usuarioSistema.findFirst({
-    where: { id: seleccion.id, puedeSerPropietario: true },
-    select: {
-      id: true,
-      perfil: { select: { nombreCompleto: true, razonSocial: true } },
-      propietario: { select: { id: true, nombre: true } },
-    },
-  });
-  if (!usuario) {
-    throw new DomainError("NOT_FOUND", "El usuario seleccionado no existe.");
-  }
-  if (usuario.propietario) return usuario.propietario.id;
-
-  const nombre =
-    usuario.perfil?.razonSocial ||
-    usuario.perfil?.nombreCompleto ||
-    `Usuario ${usuario.id.slice(0, 8)}`;
-  const propietario = await client.propietario.create({
-    data: { usuarioSistemaId: usuario.id, nombre },
+  const propietario = await client.propietario.findUnique({
+    where: { id: seleccion },
     select: { id: true },
   });
+  if (!propietario) {
+    throw new DomainError("NOT_FOUND", "El propietario seleccionado no existe.");
+  }
   return propietario.id;
 }
 
+export async function listarPropietarios() {
+  await requireSystemRole(ADMIN_ROLES);
+
+  return prisma.propietario.findMany({
+    orderBy: { nombre: "asc" },
+    include: { _count: { select: { propiedades: true, unidades: true, cuentas: true } } },
+  });
+}
+
 export async function obtenerPropietario(propietarioId: string) {
-  await requireSystemRole(WRITE_ROLES);
+  await requireSystemRole(ADMIN_ROLES);
   const id = recordIdSchema.parse(propietarioId);
 
   return prisma.propietario.findUnique({
     where: { id },
-    include: { _count: { select: { propiedades: true } } },
+    include: { _count: { select: { propiedades: true, unidades: true, cuentas: true } } },
   });
 }
 
 export async function crearPropietario(input: PropietarioInput) {
-  await requireSystemRole(WRITE_ROLES);
+  const { user } = await requireSystemRole(ADMIN_ROLES);
   const data = propietarioInputSchema.parse(input);
 
-  return prisma.propietario.create({ data });
+  return prisma.$transaction(async (tx) => {
+    const propietario = await tx.propietario.create({ data });
+    await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "CREAR", entidad: "Propietario", entidadId: propietario.id, despues: { nombre: propietario.nombre, telefono: propietario.telefono, correo: propietario.correo } });
+    return propietario;
+  });
 }
 
 export async function actualizarPropietario(
   propietarioId: string,
   input: PropietarioInput,
 ) {
-  await requireSystemRole(WRITE_ROLES);
+  const { user } = await requireSystemRole(ADMIN_ROLES);
   const id = recordIdSchema.parse(propietarioId);
   const data = propietarioInputSchema.parse(input);
 
-  return prisma.propietario.update({ where: { id }, data });
+  return prisma.$transaction(async (tx) => {
+    const before = await tx.propietario.findUnique({ where: { id } });
+    if (!before) throw new DomainError("NOT_FOUND", "El propietario no existe.");
+    const propietario = await tx.propietario.update({ where: { id }, data });
+    await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "ACTUALIZAR", entidad: "Propietario", entidadId: id, antes: { nombre: before.nombre, telefono: before.telefono, correo: before.correo }, despues: { nombre: propietario.nombre, telefono: propietario.telefono, correo: propietario.correo } });
+    return propietario;
+  });
 }
 
 export async function eliminarPropietario(propietarioId: string) {
-  await requireSystemRole(WRITE_ROLES);
+  const { user } = await requireSystemRole(ADMIN_ROLES);
   const id = recordIdSchema.parse(propietarioId);
   const propietario = await prisma.propietario.findUnique({
     where: { id },
-    select: { _count: { select: { propiedades: true, unidades: true } } },
+    select: { nombre: true, telefono: true, correo: true, _count: { select: { propiedades: true, unidades: true, cuentas: true } } },
   });
 
   if (!propietario) {
     throw new DomainError("NOT_FOUND", "El propietario no existe.");
   }
 
-  if (propietario._count.propiedades > 0 || propietario._count.unidades > 0) {
+  if (propietario._count.propiedades > 0 || propietario._count.unidades > 0 || propietario._count.cuentas > 0) {
     throw new DomainError(
       "OWNER_HAS_PROPERTIES",
-      "No se puede eliminar un propietario que tiene propiedades o unidades.",
+      "No se puede eliminar un propietario que tiene propiedades, unidades o cuentas vinculadas.",
     );
   }
 
-  return prisma.propietario.delete({ where: { id } });
+  return prisma.$transaction(async (tx) => {
+    const deleted = await tx.propietario.delete({ where: { id } });
+    await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "ELIMINAR", entidad: "Propietario", entidadId: id, antes: { nombre: propietario.nombre, telefono: propietario.telefono, correo: propietario.correo }, despues: { eliminado: true } });
+    return deleted;
+  });
 }
 
 export async function listarPropiedades({ archivadas = false }: { archivadas?: boolean } = {}) {

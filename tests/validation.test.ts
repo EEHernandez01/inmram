@@ -9,6 +9,7 @@ import {
 import { propertyReportFilterSchema } from "../src/lib/validation/reports.ts";
 import { paymentInputSchema, paymentReversalInputSchema } from "../src/lib/validation/collection.ts";
 import { propertyPhotoUploadSchema } from "../src/lib/validation/property-photos.ts";
+import { propietarioCuentaSchema, propietarioInputSchema } from "../src/lib/validation/owners.ts";
 import { canManageOperations, canViewReports } from "../src/lib/auth/role-policy.ts";
 import { RolUsuario } from "../src/generated/prisma/enums.ts";
 import { formatCurrency, normalizeCurrencyInput } from "../src/lib/format.ts";
@@ -147,4 +148,24 @@ test("acepta únicamente referencias de fotos públicas de Vercel Blob", () => {
     propertyPhotoUploadSchema.safeParse({ ...photo, tamanoBytes: 4 * 1024 * 1024 + 1 }).success,
     false,
   );
+});
+
+test("valida el catálogo de propietarios y normaliza contactos opcionales", () => {
+  const propietario = propietarioInputSchema.parse({
+    nombre: "Inmuebles del Centro, S.A. de C.V.",
+    telefono: "55 1234 5678",
+    correo: "contacto@centro.mx",
+  });
+  assert.equal(propietario.telefono, "55 1234 5678");
+  assert.equal(propietario.correo, "contacto@centro.mx");
+  assert.equal(propietarioInputSchema.parse({ nombre: "Sin contacto", telefono: "", correo: "" }).telefono, null);
+  assert.equal(propietarioInputSchema.safeParse({ nombre: "Correo inválido", correo: "sin-arroba" }).success, false);
+  assert.equal(propietarioInputSchema.safeParse({ nombre: "Teléfono inválido", telefono: "123" }).success, false);
+});
+
+test("exige vínculo solo para las cuentas con rol Propietario", () => {
+  assert.equal(propietarioCuentaSchema.safeParse({ rol: RolUsuario.PROPIETARIO, propietarioId: unitId }).success, true);
+  assert.equal(propietarioCuentaSchema.safeParse({ rol: RolUsuario.PROPIETARIO, propietarioId: null }).success, false);
+  assert.equal(propietarioCuentaSchema.safeParse({ rol: RolUsuario.GESTOR, propietarioId: null }).success, true);
+  assert.equal(propietarioCuentaSchema.safeParse({ rol: RolUsuario.ADMINISTRADOR, propietarioId: unitId }).success, false);
 });

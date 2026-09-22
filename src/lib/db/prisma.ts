@@ -19,7 +19,7 @@ const globalForPrisma = globalThis as unknown as {
   prismaSchemaVersion?: string;
 };
 
-const prismaSchemaVersion = "20260917000200";
+const prismaSchemaVersion = "20260922000100";
 
 function createPrismaClient() {
   const adapter = new PrismaNeon({ connectionString });

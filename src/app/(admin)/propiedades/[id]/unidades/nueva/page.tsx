@@ -20,7 +20,7 @@ export default async function NewUnitPage({ params, searchParams }: { params: Pr
       <PageHeader description={property.direccion} eyebrow="Unidades" title="Nueva unidad" />
       <section className="mt-7 rounded-card border border-border bg-surface p-5">
         {query.error ? <Alert className="mb-5" variant="danger">{query.error}</Alert> : null}
-        <UnitForm defaults={{ propietarioId: `propietario:${property.propietarioId}` }} owners={owners} propertyId={id} submitLabel="Guardar unidad" />
+        <UnitForm defaults={{ propietarioId: property.propietarioId }} owners={owners} propertyId={id} submitLabel="Guardar unidad" />
         <Link className="mt-5 inline-block text-sm font-semibold text-brand hover:text-brand-hover" href={`/propiedades/${id}`}>Cancelar</Link>
       </section>
     </>

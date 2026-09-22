@@ -29,6 +29,7 @@ const groups: { label?: string; items: { href: string; label: string; icon: Icon
     items: [
       { href: "/configuracion/perfil", label: "Mi perfil", icon: "user" },
       { href: "/configuracion/usuarios", label: "Usuarios", icon: "team", roles: [RolUsuario.ADMINISTRADOR] },
+      { href: "/configuracion/propietarios", label: "Propietarios", icon: "team", roles: [RolUsuario.ADMINISTRADOR] },
       { href: "/configuracion/auditoria", label: "Actividad", icon: "history", roles: [RolUsuario.ADMINISTRADOR] },
     ],
   },

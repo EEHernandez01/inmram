@@ -4,6 +4,9 @@ import { EstadoContrato, TipoGarantia, TipoUnidad } from "@/generated/prisma/enu
 import { hasValidPagareDetails } from "@/lib/contracts";
 import { normalizeCurrencyInput } from "@/lib/format";
 
+export { propietarioCuentaSchema, propietarioInputSchema } from "@/lib/validation/owners";
+export type { PropietarioCuentaInput, PropietarioInput } from "@/lib/validation/owners";
+
 const requiredText = z
   .string()
   .trim()
@@ -15,25 +18,7 @@ const date = z.iso.date();
 export const propietarioSeleccionSchema = z
   .string()
   .trim()
-  .transform((value, context) => {
-    const separatorIndex = value.indexOf(":");
-    const kind = separatorIndex >= 0 ? value.slice(0, separatorIndex) : "propietario";
-    const id = separatorIndex >= 0 ? value.slice(separatorIndex + 1) : value;
-    const parsedId = uuid.safeParse(id);
-
-    if (
-      !parsedId.success ||
-      (kind !== "propietario" && kind !== "usuario")
-    ) {
-      context.addIssue({
-        code: "custom",
-        message: "Selecciona un propietario válido.",
-      });
-      return z.NEVER;
-    }
-
-    return { tipo: kind as "propietario" | "usuario", id: parsedId.data };
-  });
+  .refine((value) => uuid.safeParse(value).success, "Selecciona un propietario válido.");
 
 const money = z.preprocess(
   normalizeCurrencyInput,
@@ -52,10 +37,6 @@ const positiveArea = z
   .trim()
   .regex(/^\d{1,8}(?:\.\d{1,2})?$/, "Captura una superficie válida.")
   .refine((value) => Number(value) > 0, "La superficie debe ser mayor que cero.");
-
-export const propietarioInputSchema = z.object({
-  nombre: requiredText,
-});
 
 export const perfilUsuarioInputSchema = z.object({
   nombreCompleto: requiredText,
@@ -191,7 +172,6 @@ export const cancelacionContratoInputSchema = z.object({
 
 export const recordIdSchema = uuid;
 
-export type PropietarioInput = z.infer<typeof propietarioInputSchema>;
 export type PerfilUsuarioInput = z.infer<typeof perfilUsuarioInputSchema>;
 export type UsuarioAdministradorInput = z.infer<typeof usuarioAdministradorInputSchema>;
 export type PropiedadInput = z.infer<typeof propiedadInputSchema>;

@@ -39,7 +39,7 @@ export function UnitForm({ defaults, owners, propertyId, submitLabel, unitId }: 
     <form action={action} className="space-y-5" method="post">
       <input name="propiedadId" type="hidden" value={propertyId} />
       <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="Dueño de la unidad" hint="Incluye todos los usuarios registrados y los propietarios sin cuenta de acceso.">
+        <Field label="Dueño de la unidad" hint="Selecciona un propietario registrado en el catálogo interno.">
           <Select defaultValue={defaults?.propietarioId ?? ""} name="propietarioId" required>
             <option value="">Selecciona un dueño</option>
             {owners.map((owner) => <option key={owner.value} value={owner.value}>{owner.nombre}</option>)}
