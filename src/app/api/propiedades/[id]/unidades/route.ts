@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { isSameOrigin, safeRouteError } from "@/lib/http/route-security";
 import { crearUnidad } from "@/lib/services/foundation";
+import { unitAmenityInputFromFormData } from "@/lib/unit-amenities";
 
 function formValue(form: FormData, key: string) {
   const value = String(form.get(key) ?? "").trim();
@@ -15,6 +16,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   try {
     const form = await request.formData();
+    const amenityInput = unitAmenityInputFromFormData(form);
     const unit = await crearUnidad({
       propiedadId: id,
       propietarioId: String(form.get("propietarioId") ?? ""),
@@ -23,8 +25,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       metrosCuadrados: String(form.get("metrosCuadrados") ?? ""),
       descripcion: formValue(form, "descripcion"),
       piso: formValue(form, "piso"),
-      atributos: null,
-      recamaras: Number(form.get("recamaras") ?? 0), banosCompletos: Number(form.get("banosCompletos") ?? 0), mediosBanos: Number(form.get("mediosBanos") ?? 0), amenidades: form.getAll("amenidades").map(String),
+      atributos: amenityInput.atributos,
+      recamaras: Number(form.get("recamaras") ?? 0), banosCompletos: Number(form.get("banosCompletos") ?? 0), mediosBanos: Number(form.get("mediosBanos") ?? 0), amenidades: amenityInput.amenidades,
     });
 
     return NextResponse.redirect(new URL(`/propiedades/${id}/unidades/${unit.id}`, url), 303);

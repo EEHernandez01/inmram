@@ -14,6 +14,7 @@ import { canManageOperations, canViewReports } from "../src/lib/auth/role-policy
 import { RolUsuario } from "../src/generated/prisma/enums.ts";
 import { formatCurrency, normalizeCurrencyInput } from "../src/lib/format.ts";
 import { hasValidPagareDetails, isCancellationDateAllowed } from "../src/lib/contracts.ts";
+import { unitAmenityDetailsFrom, unitAmenityInputFromFormData } from "../src/lib/unit-amenities.ts";
 
 const unitId = "4ca5a15a-45ef-47cc-8c3c-557e1fd1b1c6";
 const meterId = "8e6daed2-d5f8-420f-823a-6ae9b70c04fa";
@@ -168,4 +169,32 @@ test("exige vínculo solo para las cuentas con rol Propietario", () => {
   assert.equal(propietarioCuentaSchema.safeParse({ rol: RolUsuario.PROPIETARIO, propietarioId: null }).success, false);
   assert.equal(propietarioCuentaSchema.safeParse({ rol: RolUsuario.GESTOR, propietarioId: null }).success, true);
   assert.equal(propietarioCuentaSchema.safeParse({ rol: RolUsuario.ADMINISTRADOR, propietarioId: unitId }).success, false);
+});
+
+test("conserva los detalles de las amenidades de una unidad", () => {
+  const form = new FormData();
+  form.append("amenidades", "Roof garden");
+  form.append("amenidades", "Balcón");
+  form.append("amenidades", "Estacionamiento");
+  form.append("amenidades", "Bodega");
+  form.append("roofGardenMetrosCuadrados", "24.5");
+  form.append("balconMetrosCuadrados", "5.25");
+  form.append("cajonesEstacionamiento", "2");
+
+  const input = unitAmenityInputFromFormData(form);
+  assert.deepEqual(input.amenidades, ["Roof garden", "Balcón", "Estacionamiento", "Bodega"]);
+  assert.deepEqual(input.atributos, {
+    roofGardenMetrosCuadrados: "24.5",
+    balconMetrosCuadrados: "5.25",
+    cajonesEstacionamiento: "2",
+  });
+  assert.deepEqual(unitAmenityDetailsFrom({
+    roofGardenMetrosCuadrados: 24.5,
+    balconMetrosCuadrados: 5.25,
+    cajonesEstacionamiento: 2,
+  }), {
+    roofGardenMetrosCuadrados: 24.5,
+    balconMetrosCuadrados: 5.25,
+    cajonesEstacionamiento: 2,
+  });
 });

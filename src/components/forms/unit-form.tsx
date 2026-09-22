@@ -1,6 +1,8 @@
+import { UnitAmenities } from "@/components/forms/unit-amenities";
 import { Field, Input, Select, Textarea } from "@/components/ui/form-controls";
 import { FormStatus } from "@/components/ui/form-status";
 import { Button } from "@/components/ui/button";
+import type { UnitAmenityDetails } from "@/lib/unit-amenities";
 
 const unitTypes = [
   ["DEPARTAMENTO", "Departamento"],
@@ -21,7 +23,8 @@ type UnitDefaults = {
   recamaras?: number;
   banosCompletos?: number;
   mediosBanos?: number;
-  amenidades?: string | null;
+  amenidades?: string[];
+  amenityDetails?: UnitAmenityDetails;
 };
 
 export function UnitForm({ defaults, owners, propertyId, submitLabel, unitId }: {
@@ -67,9 +70,7 @@ export function UnitForm({ defaults, owners, propertyId, submitLabel, unitId }: 
       <Field label="Descripción" hint="Opcional">
         <Textarea defaultValue={defaults?.descripcion ?? ""} maxLength={2000} name="descripcion" rows={4} />
       </Field>
-      <Field label="Amenidades" hint="Separadas por coma; ej. estacionamiento, balcón, elevador">
-        <div className="grid grid-cols-2 gap-2 text-sm font-normal sm:grid-cols-3">{["Estacionamiento", "Balcón", "Elevador", "Terraza", "Roof garden", "Cuarto de servicio", "Baño de servicio"].map((item) => <label className="flex items-center gap-2 rounded-lg bg-bg px-3 py-2" key={item}><input defaultChecked={defaults?.amenidades?.split(", ").includes(item)} name="amenidades" type="checkbox" value={item} />{item}</label>)}</div>
-      </Field>
+      <UnitAmenities defaults={defaults?.amenidades} details={defaults?.amenityDetails} />
       <FormStatus message={undefined} />
       <Button type="submit">
         {submitLabel}

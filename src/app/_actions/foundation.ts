@@ -23,6 +23,7 @@ import {
   guardarFotosBlobDePropiedad,
   propertyPhotoUploadsFromFormData,
 } from "@/lib/property-photos";
+import { unitAmenityInputFromFormData } from "@/lib/unit-amenities";
 
 export type FoundationActionState = { error?: string };
 
@@ -130,6 +131,7 @@ export async function archivePropertyAction(propertyId: string) {
 }
 
 function unitInput(formData: FormData) {
+  const amenityInput = unitAmenityInputFromFormData(formData);
   return {
     propiedadId: value(formData, "propiedadId"),
     propietarioId: value(formData, "propietarioId"),
@@ -138,11 +140,11 @@ function unitInput(formData: FormData) {
     metrosCuadrados: value(formData, "metrosCuadrados"),
     descripcion: optionalValue(formData, "descripcion"),
     piso: optionalValue(formData, "piso"),
-    atributos: null,
+    atributos: amenityInput.atributos,
     recamaras: Number(value(formData, "recamaras") || 0),
     banosCompletos: Number(value(formData, "banosCompletos") || 0),
     mediosBanos: Number(value(formData, "mediosBanos") || 0),
-    amenidades: value(formData, "amenidades").split(",").map((item) => item.trim()).filter(Boolean),
+    amenidades: amenityInput.amenidades,
   };
 }
 

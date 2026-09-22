@@ -38,6 +38,12 @@ const positiveArea = z
   .regex(/^\d{1,8}(?:\.\d{1,2})?$/, "Captura una superficie válida.")
   .refine((value) => Number(value) > 0, "La superficie debe ser mayor que cero.");
 
+const unitAmenityAttributesSchema = z.object({
+  balconMetrosCuadrados: z.coerce.number().positive("Captura los metros cuadrados del balcón.").max(99_999_999.99).optional(),
+  cajonesEstacionamiento: z.coerce.number().int("Captura un número entero de cajones.").min(1, "Captura al menos un cajón de estacionamiento.").max(1_000).optional(),
+  roofGardenMetrosCuadrados: z.coerce.number().positive("Captura los metros cuadrados del roof garden.").max(99_999_999.99).optional(),
+}).strict();
+
 export const perfilUsuarioInputSchema = z.object({
   nombreCompleto: requiredText,
   alias: z.string().trim().max(100).nullable().optional(),
@@ -109,7 +115,7 @@ export const unidadInputSchema = z.object({
   metrosCuadrados: positiveArea,
   descripcion: z.string().trim().max(2_000).nullable().optional(),
   piso: z.string().trim().max(50).nullable().optional(),
-  atributos: z.record(z.string(), z.json()).nullable().optional(),
+  atributos: unitAmenityAttributesSchema.nullable().optional(),
   recamaras: z.coerce.number().int().min(0).max(50).default(0),
   banosCompletos: z.coerce.number().int().min(0).max(50).default(0),
   mediosBanos: z.coerce.number().int().min(0).max(50).default(0),
