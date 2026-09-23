@@ -104,6 +104,12 @@ const emptyAddressParts: AddressParts = {
 };
 
 let mapsLoader: Promise<PlacesLibrary> | null = null;
+let nextAutocompleteRequestAt = 0;
+let autocompleteRateLimitedUntil = 0;
+
+const MINIMUM_SEARCH_LENGTH = 8;
+const AUTOCOMPLETE_MIN_INTERVAL_MS = 1_000;
+const AUTOCOMPLETE_RATE_LIMIT_COOLDOWN_MS = 60_000;
 
 function loadPlacesLibrary(apiKey: string) {
   if (mapsLoader) return mapsLoader;
@@ -206,6 +212,11 @@ function coordinates(location: Place["location"]) {
   return { latitude: Number(latitude.toFixed(6)), longitude: Number(longitude.toFixed(6)) };
 }
 
+function isRateLimitError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /\b429\b|too many requests|rate.?limit|quota/i.test(message);
+}
+
 export function LocationPicker({ defaults, enabled }: { defaults?: LocationDefaults; enabled: boolean }) {
   const listId = useId();
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? "";
@@ -227,27 +238,30 @@ export function LocationPicker({ defaults, enabled }: { defaults?: LocationDefau
   const [activeIndex, setActiveIndex] = useState(-1);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-  const [searchEnabled, setSearchEnabled] = useState(false);
+  const [searchRequest, setSearchRequest] = useState<{ id: number; query: string } | null>(null);
   const requestId = useRef(0);
   const sessionToken = useRef<AutocompleteSessionToken | null>(null);
-  const skipNextSearch = useRef(false);
 
   useEffect(() => {
-    if (skipNextSearch.current) {
-      skipNextSearch.current = false;
-      return;
-    }
-
-    const trimmedQuery = completeAddress.trim();
-    if (!searchEnabled || !enabled || !apiKey || trimmedQuery.length < 3 || selection?.address === trimmedQuery) return;
+    const trimmedQuery = searchRequest?.query ?? "";
+    if (!enabled || !apiKey || trimmedQuery.length < MINIMUM_SEARCH_LENGTH) return;
 
     let cancelled = false;
     const currentRequestId = ++requestId.current;
+    const now = Date.now();
+    const requestDelay = Math.max(0, nextAutocompleteRequestAt - now);
     const timeout = window.setTimeout(async () => {
       setLoading(true);
       setMessage("");
 
       try {
+        if (Date.now() < autocompleteRateLimitedUntil) {
+          setSuggestions([]);
+          setMessage("La busqueda de Google Maps esta temporalmente limitada. Puedes capturar la direccion manualmente e intentar de nuevo en un minuto.");
+          return;
+        }
+
+        nextAutocompleteRequestAt = Date.now() + AUTOCOMPLETE_MIN_INTERVAL_MS;
         const { AutocompleteSessionToken, AutocompleteSuggestion } = await loadPlacesLibrary(apiKey);
         sessionToken.current ??= new AutocompleteSessionToken();
         const data = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
@@ -275,20 +289,25 @@ export function LocationPicker({ defaults, enabled }: { defaults?: LocationDefau
         if (nextSuggestions.length === 0) {
           setMessage("No hay resultados para esta busqueda. Puedes capturar la direccion manualmente.");
         }
-      } catch {
+      } catch (error) {
         if (cancelled) return;
         setSuggestions([]);
-        setMessage("No fue posible conectar con Google Maps. El formulario sigue disponible para captura manual.");
+        if (isRateLimitError(error)) {
+          autocompleteRateLimitedUntil = Date.now() + AUTOCOMPLETE_RATE_LIMIT_COOLDOWN_MS;
+          setMessage("Google Maps recibio demasiadas solicitudes. La busqueda se pausara un minuto; puedes capturar la direccion manualmente.");
+        } else {
+          setMessage("No fue posible conectar con Google Maps. El formulario sigue disponible para captura manual.");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
-    }, 350);
+    }, requestDelay);
 
     return () => {
       cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, [apiKey, completeAddress, enabled, searchEnabled, selection?.address]);
+  }, [apiKey, enabled, searchRequest]);
 
   async function chooseSuggestion(suggestion: Suggestion) {
     setLoading(true);
@@ -324,23 +343,65 @@ export function LocationPicker({ defaults, enabled }: { defaults?: LocationDefau
   }
 
   function updateCompleteAddress(value: string) {
-    setSearchEnabled(true);
     setAddressParts({ ...emptyAddressParts, calle: value });
     setCompleteAddress(value);
     setSelection(null);
     setSuggestions([]);
     setActiveIndex(-1);
-    setMessage(value.trim().length > 0 && value.trim().length < 3 ? "Escribe al menos 3 caracteres para buscar sugerencias." : "");
+    setLoading(false);
+    setSearchRequest(null);
+    setMessage("");
   }
 
   function updateAddressPart(key: keyof AddressParts, value: string) {
     const nextParts = { ...addressParts, [key]: value };
     setAddressParts(nextParts);
-    skipNextSearch.current = true;
     setCompleteAddress(formatAddress(nextParts, completeAddress));
+    setSelection(null);
+    setSuggestions([]);
+    setActiveIndex(-1);
+    setLoading(false);
+    setSearchRequest(null);
+    setMessage("");
+  }
+
+  function requestAutocomplete() {
+    const query = completeAddress.trim();
+
+    if (!enabled || !apiKey) {
+      setMessage("Google Maps no esta configurado. Puedes capturar la direccion manualmente.");
+      return;
+    }
+
+    if (query.length < MINIMUM_SEARCH_LENGTH) {
+      setMessage(`Escribe al menos ${MINIMUM_SEARCH_LENGTH} caracteres antes de buscar en Google Maps.`);
+      return;
+    }
+
+    if (Date.now() < autocompleteRateLimitedUntil) {
+      setSuggestions([]);
+      setMessage("La busqueda de Google Maps esta temporalmente limitada. Puedes capturar la direccion manualmente e intentar de nuevo en un minuto.");
+      return;
+    }
+
+    setSuggestions([]);
+    setActiveIndex(-1);
+    setLoading(true);
+    setMessage("");
+    setSearchRequest((current) => ({ id: (current?.id ?? 0) + 1, query }));
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (activeIndex >= 0 && suggestions.length > 0) {
+        void chooseSuggestion(suggestions[activeIndex]);
+      } else {
+        requestAutocomplete();
+      }
+      return;
+    }
+
     if (suggestions.length === 0) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -348,9 +409,6 @@ export function LocationPicker({ defaults, enabled }: { defaults?: LocationDefau
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
       setActiveIndex((current) => Math.max(current - 1, 0));
-    } else if (event.key === "Enter" && activeIndex >= 0) {
-      event.preventDefault();
-      void chooseSuggestion(suggestions[activeIndex]);
     } else if (event.key === "Escape") {
       setSuggestions([]);
       setActiveIndex(-1);
@@ -370,7 +428,6 @@ export function LocationPicker({ defaults, enabled }: { defaults?: LocationDefau
             autoComplete="street-address"
             maxLength={500}
             name="direccion"
-            onClick={() => setSearchEnabled(true)}
             onChange={(event) => updateCompleteAddress(event.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ej. Av. Insurgentes 300, CDMX"
@@ -402,9 +459,23 @@ export function LocationPicker({ defaults, enabled }: { defaults?: LocationDefau
           ) : null}
         </div>
         <span className="block text-xs font-normal text-ink-secondary">
-          {enabled && apiKey ? "Escribe al menos 3 caracteres y elige una sugerencia de Mexico." : "Puedes capturar la direccion manualmente. Configura NEXT_PUBLIC_GOOGLE_MAPS_API_KEY para activar sugerencias."}
+          {enabled && apiKey ? `Escribe la direccion completa y pulsa “Buscar en Google Maps”. La captura manual siempre esta disponible.` : "Puedes capturar la direccion manualmente. Configura NEXT_PUBLIC_GOOGLE_MAPS_API_KEY para activar sugerencias."}
         </span>
       </label>
+
+      {enabled && apiKey ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            className="rounded border border-brand bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:border-border disabled:bg-bg disabled:text-ink-secondary"
+            disabled={loading || completeAddress.trim().length < MINIMUM_SEARCH_LENGTH}
+            onClick={requestAutocomplete}
+            type="button"
+          >
+            {loading ? "Buscando..." : "Buscar en Google Maps"}
+          </button>
+          <span className="text-xs text-ink-secondary">Una consulta por búsqueda.</span>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <label className="block space-y-2 text-sm font-semibold text-ink">
