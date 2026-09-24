@@ -103,6 +103,11 @@ const emptyAddressParts: AddressParts = {
   codigoPostal: "",
 };
 
+type LocationChange = {
+  direccion: string;
+  googlePlaceId: string | null;
+};
+
 let mapsLoader: Promise<PlacesLibrary> | null = null;
 let nextAutocompleteRequestAt = 0;
 let autocompleteRateLimitedUntil = 0;
@@ -217,7 +222,11 @@ function isRateLimitError(error: unknown) {
   return /\b429\b|too many requests|rate.?limit|quota/i.test(message);
 }
 
-export function LocationPicker({ defaults, enabled }: { defaults?: LocationDefaults; enabled: boolean }) {
+export function LocationPicker({ defaults, enabled, onLocationChange }: {
+  defaults?: LocationDefaults;
+  enabled: boolean;
+  onLocationChange?: (location: LocationChange) => void;
+}) {
   const listId = useId();
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? "";
   const [completeAddress, setCompleteAddress] = useState(defaults?.address ?? "");
@@ -333,6 +342,7 @@ export function LocationPicker({ defaults, enabled }: { defaults?: LocationDefau
         googleMapsUri: place.googleMapsURI,
       });
       setCompleteAddress(nextAddress);
+      onLocationChange?.({ direccion: nextAddress, googlePlaceId: place.id ?? suggestion.id });
       setActiveIndex(-1);
       sessionToken.current = null;
     } catch {
@@ -345,6 +355,7 @@ export function LocationPicker({ defaults, enabled }: { defaults?: LocationDefau
   function updateCompleteAddress(value: string) {
     setAddressParts({ ...emptyAddressParts, calle: value });
     setCompleteAddress(value);
+    onLocationChange?.({ direccion: value, googlePlaceId: null });
     setSelection(null);
     setSuggestions([]);
     setActiveIndex(-1);
@@ -356,7 +367,9 @@ export function LocationPicker({ defaults, enabled }: { defaults?: LocationDefau
   function updateAddressPart(key: keyof AddressParts, value: string) {
     const nextParts = { ...addressParts, [key]: value };
     setAddressParts(nextParts);
-    setCompleteAddress(formatAddress(nextParts, completeAddress));
+    const nextAddress = formatAddress(nextParts, completeAddress);
+    setCompleteAddress(nextAddress);
+    onLocationChange?.({ direccion: nextAddress, googlePlaceId: null });
     setSelection(null);
     setSuggestions([]);
     setActiveIndex(-1);

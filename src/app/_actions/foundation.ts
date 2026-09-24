@@ -59,6 +59,7 @@ function propertyInput(formData: FormData) {
     valorComercialTotal: value(formData, "valorComercialTotal"),
     predialAnual: value(formData, "predialAnual"),
     mantenimientoAnual: value(formData, "mantenimientoAnual"),
+    confirmarDuplicado: value(formData, "confirmarDuplicado"),
   };
 }
 

@@ -13,6 +13,11 @@ import {
 import { prisma } from "@/lib/db/prisma";
 import { DomainError } from "@/lib/domain/errors";
 import { isCancellationDateAllowed } from "@/lib/contracts";
+import {
+  criteriosCoincidenciaPropiedad,
+  normalizarDireccion,
+  type CriterioCoincidenciaPropiedad,
+} from "@/lib/property-duplicates";
 import { registrarAuditoria } from "@/lib/services/audit";
 import { eliminarFotosBlob } from "@/lib/property-photos";
 import {
@@ -25,7 +30,7 @@ import {
 import {
   cancelacionContratoInputSchema,
   contratoInputSchema,
-  propiedadConPropietarioSeleccionadoSchema,
+  propiedadConConfirmacionDuplicadoSchema,
   propietarioInputSchema,
   recordIdSchema,
   toDatabaseDate,
@@ -38,12 +43,92 @@ import {
 } from "@/lib/validation/foundation";
 
 type ClientePropietarios = Pick<typeof prisma, "propietario">;
+type ClientePropiedades = Pick<Prisma.TransactionClient, "propiedad">;
 
 export type OpcionPropietario = {
   value: string;
   nombre: string;
   detalle: string;
 };
+
+export type CoincidenciaPropiedad = {
+  id: string;
+  direccion: string;
+  archivadaEn: string | null;
+  unidades: number;
+  criterios: CriterioCoincidenciaPropiedad[];
+};
+
+type BusquedaCoincidenciaPropiedad = {
+  direccion: string;
+  googlePlaceId?: string | null;
+  excluirPropiedadId?: string;
+};
+
+function normalizarGooglePlaceId(value?: string | null) {
+  const placeId = value?.trim() ?? "";
+  return placeId || null;
+}
+
+async function buscarCoincidenciasPropiedadEnCliente(
+  client: ClientePropiedades,
+  { direccion, googlePlaceId, excluirPropiedadId }: BusquedaCoincidenciaPropiedad,
+): Promise<CoincidenciaPropiedad[]> {
+  const direccionNormalizada = normalizarDireccion(direccion);
+  const placeId = normalizarGooglePlaceId(googlePlaceId);
+  const where: Prisma.PropiedadWhereInput[] = [];
+
+  if (direccionNormalizada) where.push({ direccionNormalizada });
+  if (placeId) where.push({ googlePlaceId: placeId });
+  if (where.length === 0) return [];
+
+  const properties = await client.propiedad.findMany({
+    where: {
+      id: excluirPropiedadId ? { not: excluirPropiedadId } : undefined,
+      OR: where,
+    },
+    orderBy: [{ archivadaEn: "asc" }, { creadoEn: "asc" }],
+    select: {
+      id: true,
+      direccion: true,
+      direccionNormalizada: true,
+      googlePlaceId: true,
+      archivadaEn: true,
+      _count: { select: { unidades: true } },
+    },
+  });
+
+  return properties.flatMap((property) => {
+    const criterios = criteriosCoincidenciaPropiedad({
+      direccionNormalizada,
+      googlePlaceId: placeId,
+      candidataDireccionNormalizada: property.direccionNormalizada,
+      candidataGooglePlaceId: property.googlePlaceId,
+    });
+    if (criterios.length === 0) return [];
+
+    return [{
+      id: property.id,
+      direccion: property.direccion,
+      archivadaEn: property.archivadaEn?.toISOString() ?? null,
+      unidades: property._count.unidades,
+      criterios,
+    }];
+  });
+}
+
+export async function buscarCoincidenciasPropiedad(input: BusquedaCoincidenciaPropiedad) {
+  await requireSystemRole(WRITE_ROLES);
+  const excluirPropiedadId = input.excluirPropiedadId
+    ? recordIdSchema.parse(input.excluirPropiedadId)
+    : undefined;
+
+  return buscarCoincidenciasPropiedadEnCliente(prisma, {
+    direccion: input.direccion.slice(0, 500),
+    googlePlaceId: input.googlePlaceId?.slice(0, 255),
+    excluirPropiedadId,
+  });
+}
 
 export async function listarOpcionesPropietario(): Promise<OpcionPropietario[]> {
   await requireSystemRole(WRITE_ROLES);
@@ -249,13 +334,44 @@ export async function obtenerPropiedad(propiedadId: string) {
   });
 }
 
-export async function crearPropiedad(input: unknown) {
-  await requireSystemRole(WRITE_ROLES);
-  const { propietarioId: seleccion, ...data } = propiedadConPropietarioSeleccionadoSchema.parse(input);
+export async function crearPropiedad(
+  input: unknown,
+  despuesDeCrear?: (transaction: Prisma.TransactionClient, propiedad: { id: string }) => Promise<void>,
+) {
+  const { user } = await requireSystemRole(WRITE_ROLES);
+  const { propietarioId: seleccion, confirmarDuplicado, ...data } = propiedadConConfirmacionDuplicadoSchema.parse(input);
+  const direccionNormalizada = normalizarDireccion(data.direccion);
 
   return prisma.$transaction(async (transaction) => {
+    const coincidencias = await buscarCoincidenciasPropiedadEnCliente(transaction, {
+      direccion: data.direccion,
+      googlePlaceId: data.googlePlaceId,
+    });
+    if (coincidencias.length > 0 && !confirmarDuplicado) {
+      throw new DomainError(
+        "PROPERTY_POSSIBLE_DUPLICATE",
+        "Ya existe una propiedad con esta dirección o ubicación. Abre la ficha existente para agregar una unidad o confirma que es un inmueble distinto.",
+      );
+    }
+
     const propietarioId = await resolverPropietarioSeleccionado(seleccion, transaction);
-    return transaction.propiedad.create({ data: { ...data, propietarioId } });
+    const propiedad = await transaction.propiedad.create({
+      data: { ...data, propietarioId, direccionNormalizada },
+    });
+    await despuesDeCrear?.(transaction, propiedad);
+
+    if (coincidencias.length > 0) {
+      await registrarAuditoria(transaction, {
+        usuarioSistemaId: user.id,
+        accion: "CREAR_DUPLICADO_CONFIRMADO",
+        entidad: "Propiedad",
+        entidadId: propiedad.id,
+        antes: { coincidencias },
+        despues: { direccion: propiedad.direccion, direccionNormalizada },
+      });
+    }
+
+    return propiedad;
   });
 }
 
@@ -263,15 +379,170 @@ export async function actualizarPropiedad(
   propiedadId: string,
   input: unknown,
 ) {
-  await requireSystemRole(WRITE_ROLES);
+  const { user } = await requireSystemRole(WRITE_ROLES);
   const id = recordIdSchema.parse(propiedadId);
-  const { propietarioId: seleccion, ...data } = propiedadConPropietarioSeleccionadoSchema.parse(input);
+  const { propietarioId: seleccion, confirmarDuplicado, ...data } = propiedadConConfirmacionDuplicadoSchema.parse(input);
+  const direccionNormalizada = normalizarDireccion(data.direccion);
 
   await asegurarPropiedadActiva(id);
 
   return prisma.$transaction(async (transaction) => {
+    const coincidencias = await buscarCoincidenciasPropiedadEnCliente(transaction, {
+      direccion: data.direccion,
+      googlePlaceId: data.googlePlaceId,
+      excluirPropiedadId: id,
+    });
+    if (coincidencias.length > 0 && !confirmarDuplicado) {
+      throw new DomainError(
+        "PROPERTY_POSSIBLE_DUPLICATE",
+        "Ya existe una propiedad con esta dirección o ubicación. Abre la ficha existente para agregar una unidad o confirma que es un inmueble distinto.",
+      );
+    }
+
     const propietarioId = await resolverPropietarioSeleccionado(seleccion, transaction);
-    return transaction.propiedad.update({ where: { id }, data: { ...data, propietarioId } });
+    const propiedad = await transaction.propiedad.update({
+      where: { id },
+      data: { ...data, propietarioId, direccionNormalizada },
+    });
+
+    if (coincidencias.length > 0) {
+      await registrarAuditoria(transaction, {
+        usuarioSistemaId: user.id,
+        accion: "ACTUALIZAR_DUPLICADO_CONFIRMADO",
+        entidad: "Propiedad",
+        entidadId: id,
+        antes: { coincidencias },
+        despues: { direccion: propiedad.direccion, direccionNormalizada },
+      });
+    }
+
+    return propiedad;
+  });
+}
+
+function resumenPropiedadParaUnificacion(propiedad: {
+  id: string;
+  direccion: string;
+  direccionNormalizada: string;
+  googlePlaceId: string | null;
+  propietarioId: string;
+  marcaId: string | null;
+  creadoEn: Date;
+  valorCatastral: { toString(): string };
+  valorComercialTotal: { toString(): string };
+  predialAnual: { toString(): string };
+  mantenimientoAnual: { toString(): string };
+}) {
+  return {
+    id: propiedad.id,
+    direccion: propiedad.direccion,
+    direccionNormalizada: propiedad.direccionNormalizada,
+    googlePlaceId: propiedad.googlePlaceId,
+    propietarioId: propiedad.propietarioId,
+    marcaId: propiedad.marcaId,
+    creadoEn: propiedad.creadoEn.toISOString(),
+    valores: {
+      valorCatastral: propiedad.valorCatastral.toString(),
+      valorComercialTotal: propiedad.valorComercialTotal.toString(),
+      predialAnual: propiedad.predialAnual.toString(),
+      mantenimientoAnual: propiedad.mantenimientoAnual.toString(),
+    },
+  };
+}
+
+export async function unificarPropiedades(
+  primeraPropiedadId: string,
+  segundaPropiedadId: string,
+) {
+  const { user } = await requireSystemRole(WRITE_ROLES);
+  const firstId = recordIdSchema.parse(primeraPropiedadId);
+  const secondId = recordIdSchema.parse(segundaPropiedadId);
+  if (firstId === secondId) {
+    throw new DomainError("PROPERTY_MERGE_SAME", "Selecciona dos propiedades distintas para unificarlas.");
+  }
+
+  return prisma.$transaction(async (transaction) => {
+    const properties = await transaction.propiedad.findMany({
+      where: { id: { in: [firstId, secondId] } },
+      select: {
+        id: true,
+        direccion: true,
+        direccionNormalizada: true,
+        googlePlaceId: true,
+        propietarioId: true,
+        marcaId: true,
+        valorCatastral: true,
+        valorComercialTotal: true,
+        predialAnual: true,
+        mantenimientoAnual: true,
+        archivadaEn: true,
+        creadoEn: true,
+        archivos: { select: { id: true, orden: true }, orderBy: { orden: "asc" } },
+        unidades: { select: { id: true, identificador: true } },
+      },
+    });
+
+    if (properties.length !== 2) {
+      throw new DomainError("NOT_FOUND", "Una de las propiedades seleccionadas ya no existe.");
+    }
+    if (properties.some((property) => property.archivadaEn)) {
+      throw new DomainError("PROPERTY_ARCHIVED", "No se pueden unificar propiedades archivadas.");
+    }
+
+    const [principal, duplicada] = properties.toSorted((a, b) => {
+      const difference = a.creadoEn.getTime() - b.creadoEn.getTime();
+      return difference || a.id.localeCompare(b.id);
+    });
+    const criterios = criteriosCoincidenciaPropiedad({
+      direccionNormalizada: principal.direccionNormalizada,
+      googlePlaceId: principal.googlePlaceId,
+      candidataDireccionNormalizada: duplicada.direccionNormalizada,
+      candidataGooglePlaceId: duplicada.googlePlaceId,
+    });
+    if (criterios.length === 0) {
+      throw new DomainError("PROPERTY_NOT_DUPLICATE", "Las propiedades no coinciden por dirección ni por ubicación de Google Maps.");
+    }
+
+    const identifiers = new Set(principal.unidades.map((unit) => unit.identificador.trim().toLocaleLowerCase("es-MX")));
+    const repeatedIdentifiers = duplicada.unidades
+      .map((unit) => unit.identificador)
+      .filter((identifier) => identifiers.has(identifier.trim().toLocaleLowerCase("es-MX")));
+    if (repeatedIdentifiers.length > 0) {
+      throw new DomainError(
+        "PROPERTY_MERGE_UNIT_IDENTIFIER_CONFLICT",
+        `No se pueden unificar porque ambas propiedades tienen la unidad ${repeatedIdentifiers.join(", ")}. Renombra una unidad antes de continuar.`,
+      );
+    }
+
+    const maxPhotoOrder = principal.archivos.reduce((maximum, file) => Math.max(maximum, file.orden), -1);
+    await Promise.all(duplicada.archivos.map((file, index) => transaction.archivoExpediente.update({
+      where: { id: file.id },
+      data: { propiedadId: principal.id, orden: maxPhotoOrder + index + 1 },
+    })));
+    await transaction.unidad.updateMany({
+      where: { id: { in: duplicada.unidades.map((unit) => unit.id) } },
+      data: { propiedadId: principal.id },
+    });
+    await transaction.propiedad.delete({ where: { id: duplicada.id } });
+    await registrarAuditoria(transaction, {
+      usuarioSistemaId: user.id,
+      accion: "UNIFICAR",
+      entidad: "Propiedad",
+      entidadId: principal.id,
+      antes: {
+        principal: resumenPropiedadParaUnificacion(principal),
+        duplicada: resumenPropiedadParaUnificacion(duplicada),
+        unidadesMovidas: duplicada.unidades.map((unit) => ({ id: unit.id, identificador: unit.identificador })),
+        archivosMovidos: duplicada.archivos.map((file) => file.id),
+      },
+      despues: {
+        propiedadConservadaId: principal.id,
+        propiedadEliminadaId: duplicada.id,
+        criterios,
+      },
+    });
+
+    return { propiedadId: principal.id, propiedadEliminadaId: duplicada.id };
   });
 }
 

@@ -107,6 +107,18 @@ export const propiedadConPropietarioSeleccionadoSchema = propiedadBaseSchema
   .extend({ propietarioId: propietarioSeleccionSchema })
   .superRefine(validatePropertyCoordinates);
 
+const confirmacionDuplicadoSchema = z.preprocess(
+  (value) => value === true || value === "1",
+  z.boolean(),
+);
+
+export const propiedadConConfirmacionDuplicadoSchema = propiedadBaseSchema
+  .extend({
+    propietarioId: propietarioSeleccionSchema,
+    confirmarDuplicado: confirmacionDuplicadoSchema,
+  })
+  .superRefine(validatePropertyCoordinates);
+
 export const unidadInputSchema = z.object({
   propiedadId: uuid,
   propietarioId: propietarioSeleccionSchema,

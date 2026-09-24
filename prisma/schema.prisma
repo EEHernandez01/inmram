@@ -114,6 +114,7 @@ model Propiedad {
   propietarioId       String      @db.Uuid
   marcaId             String?     @db.Uuid
   direccion           String
+  direccionNormalizada String
   googlePlaceId       String?
   latitud             Decimal?    @db.Decimal(9, 6)
   longitud            Decimal?    @db.Decimal(9, 6)
@@ -131,6 +132,7 @@ model Propiedad {
 
   @@index([propietarioId])
   @@index([marcaId])
+  @@index([direccionNormalizada])
   @@index([googlePlaceId])
   @@index([archivadaEn])
 }

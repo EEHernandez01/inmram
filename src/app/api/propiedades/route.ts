@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
-import { prisma } from "@/lib/db/prisma";
 import { eliminarFotosBlob, propertyPhotoUploadsFromFormData } from "@/lib/property-photos";
-import { resolverPropietarioSeleccionado } from "@/lib/services/foundation";
-import { propiedadConPropietarioSeleccionadoSchema } from "@/lib/validation/foundation";
+import { crearPropiedad } from "@/lib/services/foundation";
 import { isSameOrigin, safeRouteError } from "@/lib/http/route-security";
 
 function formValue(form: FormData, key: string) {
@@ -23,7 +21,8 @@ export async function POST(request: Request) {
   try {
     await requireSystemRole(WRITE_ROLES);
     const form = await request.formData();
-    const { propietarioId: seleccion, ...data } = propiedadConPropietarioSeleccionadoSchema.parse({
+    photos = propertyPhotoUploadsFromFormData(form);
+    const property = await crearPropiedad({
       propietarioId: String(form.get("propietarioId") ?? ""),
       marcaId: formValue(form, "marcaId"),
       direccion: String(form.get("direccion") ?? ""),
@@ -34,13 +33,8 @@ export async function POST(request: Request) {
       valorComercialTotal: String(form.get("valorComercialTotal") ?? ""),
       predialAnual: String(form.get("predialAnual") ?? ""),
       mantenimientoAnual: String(form.get("mantenimientoAnual") ?? ""),
-    });
-    photos = propertyPhotoUploadsFromFormData(form);
-
-    const property = await prisma.$transaction(async (transaction) => {
-      const propietarioId = await resolverPropietarioSeleccionado(seleccion, transaction);
-      const created = await transaction.propiedad.create({ data: { ...data, propietarioId } });
-
+      confirmarDuplicado: String(form.get("confirmarDuplicado") ?? ""),
+    }, async (transaction, created) => {
       if (photos.length > 0) {
         await transaction.archivoExpediente.createMany({
           data: photos.map((photo, order) => ({
@@ -54,8 +48,6 @@ export async function POST(request: Request) {
           })),
         });
       }
-
-      return created;
     });
 
     const target = new URL(`/propiedades/${property.id}`, requestUrl);

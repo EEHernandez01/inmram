@@ -15,6 +15,7 @@ import { RolUsuario } from "../src/generated/prisma/enums.ts";
 import { formatCurrency, normalizeCurrencyInput } from "../src/lib/format.ts";
 import { hasValidPagareDetails, isCancellationDateAllowed } from "../src/lib/contracts.ts";
 import { unitAmenityDetailsFrom, unitAmenityInputFromFormData } from "../src/lib/unit-amenities.ts";
+import { criteriosCoincidenciaPropiedad, normalizarDireccion } from "../src/lib/property-duplicates.ts";
 
 const unitId = "4ca5a15a-45ef-47cc-8c3c-557e1fd1b1c6";
 const meterId = "8e6daed2-d5f8-420f-823a-6ae9b70c04fa";
@@ -169,6 +170,31 @@ test("exige vínculo solo para las cuentas con rol Propietario", () => {
   assert.equal(propietarioCuentaSchema.safeParse({ rol: RolUsuario.PROPIETARIO, propietarioId: null }).success, false);
   assert.equal(propietarioCuentaSchema.safeParse({ rol: RolUsuario.GESTOR, propietarioId: null }).success, true);
   assert.equal(propietarioCuentaSchema.safeParse({ rol: RolUsuario.ADMINISTRADOR, propietarioId: unitId }).success, false);
+});
+
+test("normaliza direcciones y reconoce coincidencias por dirección o Google Maps", () => {
+  assert.equal(
+    normalizarDireccion(" Avenida Cobalto 66, Los Framboyanes, Ciudad de México "),
+    "avenida cobalto 66 los framboyanes ciudad de mexico",
+  );
+  assert.deepEqual(
+    criteriosCoincidenciaPropiedad({
+      direccionNormalizada: normalizarDireccion("Av. Cobalto 66"),
+      googlePlaceId: "place-123",
+      candidataDireccionNormalizada: normalizarDireccion("Av. Cobalto 66"),
+      candidataGooglePlaceId: "place-123",
+    }),
+    ["DIRECCION", "GOOGLE_PLACE"],
+  );
+  assert.deepEqual(
+    criteriosCoincidenciaPropiedad({
+      direccionNormalizada: normalizarDireccion("Av. Cobalto 66"),
+      googlePlaceId: "place-123",
+      candidataDireccionNormalizada: normalizarDireccion("Otra dirección 1"),
+      candidataGooglePlaceId: "place-123",
+    }),
+    ["GOOGLE_PLACE"],
+  );
 });
 
 test("conserva los detalles de las amenidades de una unidad", () => {

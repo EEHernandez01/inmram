@@ -37,6 +37,7 @@ export async function POST(
       valorComercialTotal: String(form.get("valorComercialTotal") ?? ""),
       predialAnual: String(form.get("predialAnual") ?? ""),
       mantenimientoAnual: String(form.get("mantenimientoAnual") ?? ""),
+      confirmarDuplicado: String(form.get("confirmarDuplicado") ?? ""),
     });
     await guardarFotosBlobDePropiedad(id, photos);
 
