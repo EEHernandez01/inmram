@@ -147,22 +147,88 @@ export async function eliminarPropietario(propietarioId: string) {
   });
 }
 
-export async function listarPropiedades({ archivadas = false }: { archivadas?: boolean } = {}) {
+export type FiltroDisponibilidadPropiedad = "TODAS" | "CON_DISPONIBILIDAD" | "SIN_DISPONIBILIDAD";
+export type OrdenPropiedades = "DIRECCION_ASC" | "DIRECCION_DESC" | "VALOR_DESC" | "VALOR_ASC" | "DISPONIBILIDAD_DESC";
+
+export type OpcionesListadoPropiedades = {
+  archivadas?: boolean;
+  busqueda?: string;
+  propietarioId?: string;
+  disponibilidad?: FiltroDisponibilidadPropiedad;
+  orden?: OrdenPropiedades;
+};
+
+export async function listarPropiedades({
+  archivadas = false,
+  busqueda,
+  propietarioId,
+  disponibilidad = "TODAS",
+  orden = "DIRECCION_ASC",
+}: OpcionesListadoPropiedades = {}) {
   await requireSystemRole(READ_ROLES);
   const ownerId = await getOwnerScope();
+  const busquedaNormalizada = busqueda?.trim();
+  const unidadesDelUsuario = ownerId ? { propietarioId: ownerId } : {};
+  const unidadesDisponibles = {
+    ...unidadesDelUsuario,
+    contratos: { none: { estado: EstadoContrato.ACTIVO } },
+  };
+  const conditions: Prisma.PropiedadWhereInput[] = [
+    { archivadaEn: archivadas ? { not: null } : null },
+  ];
 
-  return prisma.propiedad.findMany({
-    where: {
-      unidades: ownerId ? { some: { propietarioId: ownerId } } : undefined,
-      archivadaEn: archivadas ? { not: null } : null,
-    },
-    orderBy: { direccion: "asc" },
+  if (ownerId) conditions.push({ unidades: { some: { propietarioId: ownerId } } });
+  if (propietarioId && !ownerId) conditions.push({ propietarioId });
+  if (busquedaNormalizada) {
+    conditions.push({
+      OR: [
+        { direccion: { contains: busquedaNormalizada, mode: Prisma.QueryMode.insensitive } },
+        { propietario: { nombre: { contains: busquedaNormalizada, mode: Prisma.QueryMode.insensitive } } },
+        { marca: { nombreComercial: { contains: busquedaNormalizada, mode: Prisma.QueryMode.insensitive } } },
+      ],
+    });
+  }
+  if (disponibilidad === "CON_DISPONIBILIDAD") conditions.push({ unidades: { some: unidadesDisponibles } });
+  if (disponibilidad === "SIN_DISPONIBILIDAD") conditions.push({ unidades: { none: unidadesDisponibles } });
+
+  const orderBy = orden === "DIRECCION_DESC"
+    ? { direccion: "desc" as const }
+    : orden === "VALOR_DESC"
+      ? { valorComercialTotal: "desc" as const }
+      : orden === "VALOR_ASC"
+        ? { valorComercialTotal: "asc" as const }
+        : { direccion: "asc" as const };
+
+  const propiedades = await prisma.propiedad.findMany({
+    where: { AND: conditions },
+    orderBy,
     include: {
       propietario: true,
       marca: true,
       archivos: { where: { tipo: "FOTO_PROPIEDAD" }, orderBy: { orden: "asc" }, take: 1 },
+      unidades: { where: unidadesDisponibles, select: { id: true } },
       _count: { select: { unidades: ownerId ? { where: { propietarioId: ownerId } } : true } },
     },
+  });
+
+  if (orden !== "DISPONIBILIDAD_DESC") return propiedades;
+
+  return propiedades.toSorted((a, b) => {
+    const diferencia = b.unidades.length - a.unidades.length;
+    return diferencia || a.direccion.localeCompare(b.direccion, "es");
+  });
+}
+
+export async function listarPropietariosParaFiltroPropiedades({ archivadas = false }: { archivadas?: boolean } = {}) {
+  await requireSystemRole(READ_ROLES);
+  const ownerId = await getOwnerScope();
+
+  if (ownerId) return [];
+
+  return prisma.propietario.findMany({
+    where: { propiedades: { some: { archivadaEn: archivadas ? { not: null } : null } } },
+    orderBy: { nombre: "asc" },
+    select: { id: true, nombre: true },
   });
 }
 
