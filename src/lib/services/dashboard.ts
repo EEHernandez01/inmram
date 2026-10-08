@@ -17,28 +17,32 @@ export async function listarProximosVencimientosContrato(
   const ownerId = await getOwnerScope();
   const limit = new Date(now);
   limit.setUTCDate(limit.getUTCDate() + 90);
+  const where = {
+    estado: EstadoContrato.ACTIVO,
+    fechaFin: { gte: now, lte: limit },
+    ...(ownerId ? { unidad: { propietarioId: ownerId } } : {}),
+  };
 
-  return prisma.contrato.findMany({
-    where: {
-      estado: EstadoContrato.ACTIVO,
-      fechaFin: { gte: now, lte: limit },
-      ...(ownerId
-        ? { unidad: { propietarioId: ownerId } }
-        : {}),
-    },
-    orderBy: { fechaFin: "asc" },
-    take: 5,
-    select: {
-      id: true,
-      arrendatario: true,
-      fechaFin: true,
-      unidad: {
-        select: {
-          id: true,
-          identificador: true,
-          propiedad: { select: { id: true, direccion: true } },
+  const [total, contracts] = await Promise.all([
+    prisma.contrato.count({ where }),
+    prisma.contrato.findMany({
+      where,
+      orderBy: { fechaFin: "asc" },
+      take: 5,
+      select: {
+        id: true,
+        arrendatario: true,
+        fechaFin: true,
+        unidad: {
+          select: {
+            id: true,
+            identificador: true,
+            propiedad: { select: { id: true, direccion: true } },
+          },
         },
       },
-    },
-  });
+    }),
+  ]);
+
+  return { total, contracts };
 }

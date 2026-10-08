@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { type ReactNode } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { RolUsuario } from "@/generated/prisma/enums";
 
 type IconName = "home" | "building" | "file" | "wallet" | "chart" | "user" | "team" | "history";
@@ -49,19 +50,82 @@ function Icon({ name }: { name: IconName }) {
   return <svg aria-hidden="true" className="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">{paths[name]}</svg>;
 }
 
-function Navigation({ role }: { role: RolUsuario }) {
+function Navigation({ role, onNavigate }: { role: RolUsuario; onNavigate?: () => void }) {
   const pathname = usePathname();
   return <nav aria-label="Navegación principal" className="space-y-5">
     {groups.map((group) => <div key={group.label ?? "inicio"}>
       {group.label ? <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary/70">{group.label}</p> : null}
       <div className="space-y-1">{group.items.filter((item) => !item.roles || item.roles.includes(role)).map((item) => {
         const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
-        return <Link className={active ? "nav-item nav-item-active" : "nav-item"} href={item.href} key={item.href}><Icon name={item.icon}/><span>{item.label}</span></Link>;
+        return <Link aria-current={active ? "page" : undefined} className={active ? "nav-item nav-item-active" : "nav-item"} href={item.href} key={item.href} onClick={onNavigate}><Icon name={item.icon}/><span>{item.label}</span></Link>;
       })}</div>
     </div>)}
   </nav>;
 }
 
+function MobileNavigation({ alias, email, name, role }: { alias?: string | null; email: string; name: string; role: RolUsuario }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+        triggerRef.current?.focus();
+      }
+    }
+
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [isOpen]);
+
+  return (
+    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-bg px-5 py-3 lg:hidden">
+      <Link className="brand-lockup" href="/dashboard">
+        <span aria-hidden="true" className="brand-mark">R</span>
+        <span>INMOBILIARIA RAMOS</span>
+      </Link>
+      <button
+        aria-controls="mobile-primary-navigation"
+        aria-expanded={isOpen}
+        className="rounded-lg border border-border bg-surface px-3 py-2 text-sm font-semibold text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        onClick={() => setIsOpen((open) => !open)}
+        ref={triggerRef}
+        type="button"
+      >
+        {isOpen ? "Cerrar" : "Menú"}
+      </button>
+      <div id="mobile-primary-navigation" className={isOpen ? "absolute inset-x-0 top-full max-h-[calc(100dvh_-_4rem)] overflow-y-auto border-b border-border bg-bg px-5 py-5 shadow-md" : "hidden"}>
+          <Navigation role={role} onNavigate={() => setIsOpen(false)} />
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-4">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-ink">{name}</p>
+              <p className="mt-0.5 truncate text-xs text-ink-secondary">{alias || email}</p>
+            </div>
+            <SignOutButton />
+          </div>
+      </div>
+    </header>
+  );
+}
+
 export function Sidebar({ alias, email, name, role }: { alias?: string | null; email: string; name: string; role: RolUsuario }) {
-  return <aside className="fixed inset-y-0 left-0 hidden w-[272px] flex-col bg-bg px-5 py-6 lg:flex"><Link className="brand-lockup" href="/dashboard"><span className="brand-mark">R</span><span>INMOBILIARIA RAMOS</span></Link><div className="mt-10 flex-1 overflow-y-auto"><Navigation role={role} /></div><div className="soft-inset mt-5 flex items-center gap-3 rounded-2xl p-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-sm font-bold text-white">{name.charAt(0).toUpperCase()}</span><div className="min-w-0"><p className="truncate text-xs font-bold text-ink">{name}</p><p className="mt-0.5 truncate text-[11px] text-ink-secondary">{alias || email}</p></div></div></aside>;
+  return (
+    <>
+      <MobileNavigation alias={alias} email={email} name={name} role={role} />
+      <aside className="fixed inset-y-0 left-0 hidden w-[272px] flex-col bg-bg px-5 py-6 lg:flex">
+        <Link className="brand-lockup" href="/dashboard"><span className="brand-mark">R</span><span>INMOBILIARIA RAMOS</span></Link>
+        <div className="mt-10 flex-1 overflow-y-auto"><Navigation role={role} /></div>
+        <div className="mt-5 border-t border-border pt-4">
+          <div className="soft-inset flex items-center gap-3 rounded-2xl p-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-sm font-bold text-white">{name.charAt(0).toUpperCase()}</span>
+            <div className="min-w-0"><p className="truncate text-xs font-bold text-ink">{name}</p><p className="mt-0.5 truncate text-[11px] text-ink-secondary">{alias || email}</p></div>
+          </div>
+          <div className="mt-3"><SignOutButton /></div>
+        </div>
+      </aside>
+    </>
+  );
 }
