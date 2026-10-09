@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { authClient } from "@/lib/auth/client";
 
-export function SignOutButton() {
+export function SignOutButton({ className = "" }: { className?: string }) {
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,11 +31,12 @@ export function SignOutButton() {
   return (
     <div className="flex flex-col items-end gap-2">
       <button
-        className="rounded border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-ink hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
+        className={`flex items-center rounded-xl border border-border bg-bg px-3 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
         disabled={isPending}
         onClick={handleSignOut}
         type="button"
       >
+        <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-ink-secondary" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M10 17l5-5-5-5M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg>
         {isPending ? "Cerrando sesión…" : "Cerrar sesión"}
       </button>
       {error ? <p className="text-xs font-medium text-danger">{error}</p> : null}

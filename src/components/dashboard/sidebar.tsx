@@ -11,7 +11,7 @@ type IconName = "home" | "building" | "file" | "wallet" | "chart" | "user" | "te
 const groups: { label?: string; items: { href: string; label: string; icon: IconName; roles?: readonly RolUsuario[] }[] }[] = [
   { items: [{ href: "/dashboard", label: "Inicio", icon: "home" }] },
   {
-    label: "Operación diaria",
+    label: "Gestión de rentas",
     items: [
       { href: "/cobranza", label: "Cobranza", icon: "wallet", roles: [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR, RolUsuario.PROPIETARIO, RolUsuario.SOLO_LECTURA] },
       { href: "/propiedades", label: "Propiedades", icon: "building", roles: [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR, RolUsuario.PROPIETARIO, RolUsuario.SOLO_LECTURA] },
@@ -26,9 +26,8 @@ const groups: { label?: string; items: { href: string; label: string; icon: Icon
     ],
   },
   {
-    label: "Cuenta y sistema",
+    label: "Sistema",
     items: [
-      { href: "/configuracion/perfil", label: "Mi perfil", icon: "user" },
       { href: "/configuracion/usuarios", label: "Usuarios", icon: "team", roles: [RolUsuario.ADMINISTRADOR] },
       { href: "/configuracion/propietarios", label: "Propietarios", icon: "team", roles: [RolUsuario.ADMINISTRADOR] },
       { href: "/configuracion/auditoria", label: "Actividad", icon: "history", roles: [RolUsuario.ADMINISTRADOR] },
@@ -119,11 +118,24 @@ export function Sidebar({ alias, email, name, role }: { alias?: string | null; e
         <Link className="brand-lockup" href="/dashboard"><span className="brand-mark">R</span><span>INMOBILIARIA RAMOS</span></Link>
         <div className="mt-10 flex-1 overflow-y-auto"><Navigation role={role} /></div>
         <div className="mt-5 border-t border-border pt-4">
-          <div className="soft-inset flex items-center gap-3 rounded-2xl p-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-sm font-bold text-white">{name.charAt(0).toUpperCase()}</span>
-            <div className="min-w-0"><p className="truncate text-xs font-bold text-ink">{name}</p><p className="mt-0.5 truncate text-[11px] text-ink-secondary">{alias || email}</p></div>
-          </div>
-          <div className="mt-3"><SignOutButton /></div>
+          <details className="group relative">
+            <summary className="account-menu-trigger nav-item cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-sm font-bold text-white">{name.charAt(0).toUpperCase()}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-bold text-inherit">{name}</span>
+                <span className="mt-0.5 block truncate text-[11px] text-ink-secondary">{alias || email}</span>
+              </span>
+              <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-ink-secondary transition-transform group-open:rotate-180" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+            </summary>
+            <div className="absolute inset-x-0 bottom-full z-20 mb-2 rounded-xl border border-border bg-surface p-2 shadow-md">
+              <Link className="nav-item w-full" href="/configuracion/perfil" onClick={(event) => event.currentTarget.closest("details")?.removeAttribute("open")}>
+                <Icon name="user" />
+                <span>Mi perfil</span>
+              </Link>
+              <div className="my-2 border-t border-border" />
+              <SignOutButton className="w-full justify-start gap-3 text-left" />
+            </div>
+          </details>
         </div>
       </aside>
     </>
