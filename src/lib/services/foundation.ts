@@ -15,11 +15,19 @@ import { DomainError } from "@/lib/domain/errors";
 import { isCancellationDateAllowed } from "@/lib/contracts";
 import {
   criteriosCoincidenciaPropiedad,
+  criteriosUnificacion,
   normalizarDireccion,
   type CriterioCoincidenciaPropiedad,
 } from "@/lib/property-duplicates";
 import { registrarAuditoria } from "@/lib/services/audit";
+import { ubicacionParaUnificarSchema } from "@/lib/validation/property-merge";
 import { eliminarFotosBlob } from "@/lib/property-photos";
+import type { PropertyPhotoUpload } from "@/lib/validation/property-photos";
+import {
+  altaPropiedadAsistidaSchema,
+  type ReferenciaPropietarioEnAsistente,
+  type ReferenciaPropietarioUnidadEnAsistente,
+} from "@/lib/validation/property-onboarding";
 import {
   calculateReceiptDueDate,
   calculateReceiptStatus,
@@ -375,6 +383,159 @@ export async function crearPropiedad(
   });
 }
 
+async function crearPropietarioEnAsistente(
+  propietario: { nombre: string; telefono?: string | null; correo?: string | null },
+  transaction: Prisma.TransactionClient,
+  usuarioSistemaId: string,
+) {
+  const creado = await transaction.propietario.create({ data: propietario });
+  await registrarAuditoria(transaction, {
+    usuarioSistemaId,
+    accion: "CREAR",
+    entidad: "Propietario",
+    entidadId: creado.id,
+    despues: { nombre: creado.nombre, telefono: creado.telefono, correo: creado.correo },
+  });
+  return creado.id;
+}
+
+async function resolverPropietarioEnAsistente(
+  referencia: ReferenciaPropietarioEnAsistente | ReferenciaPropietarioUnidadEnAsistente,
+  transaction: Prisma.TransactionClient,
+  usuarioSistemaId: string,
+  propietarioPrincipalId?: string,
+) {
+  if (referencia.modo === "PRINCIPAL") {
+    if (!propietarioPrincipalId) {
+      throw new DomainError("OWNER_REQUIRED", "Selecciona el propietario principal antes de asignarlo a una unidad.");
+    }
+    return propietarioPrincipalId;
+  }
+
+  if (referencia.modo === "EXISTENTE") {
+    return resolverPropietarioSeleccionado(referencia.propietarioId, transaction);
+  }
+
+  return crearPropietarioEnAsistente(referencia.propietario, transaction, usuarioSistemaId);
+}
+
+/** Crea el alta completa del asistente sin dejar propietarios, unidades o contratos parciales. */
+export async function crearAltaPropiedadAsistida(
+  input: unknown,
+  fotos: readonly PropertyPhotoUpload[] = [],
+) {
+  const { user } = await requireSystemRole(WRITE_ROLES);
+  const alta = altaPropiedadAsistidaSchema.parse(input);
+
+  return prisma.$transaction(async (transaction) => {
+    const existenteId = "propiedadExistenteId" in alta ? alta.propiedadExistenteId : undefined;
+    const coincidencias = await buscarCoincidenciasPropiedadEnCliente(transaction, {
+      direccion: typeof alta.propiedad.direccion === "string" ? alta.propiedad.direccion : "",
+      googlePlaceId: typeof alta.propiedad.googlePlaceId === "string" ? alta.propiedad.googlePlaceId : null,
+    });
+    const propiedad = await (async () => {
+      if (existenteId) {
+        const existente = await transaction.propiedad.findUnique({ where: { id: existenteId } });
+        if (!existente) throw new DomainError("NOT_FOUND", "La propiedad seleccionada ya no existe.");
+        if (existente.archivadaEn) throw new DomainError("PROPERTY_ARCHIVED", "La propiedad seleccionada está archivada.");
+        if (!coincidencias.some((item) => item.id === existenteId)) {
+          throw new DomainError("PROPERTY_NOT_DUPLICATE", "La propiedad seleccionada no coincide con la dirección o ubicación capturada.");
+        }
+        if (fotos.length) throw new DomainError("PROPERTY_PHOTOS_NOT_ALLOWED", "Agrega las fotos desde la ficha de la propiedad existente.");
+        return existente;
+      }
+      if (!alta.propietario) throw new DomainError("OWNER_REQUIRED", "Selecciona el propietario principal.");
+      const propietarioPrincipalId = await resolverPropietarioEnAsistente(alta.propietario, transaction, user.id);
+      const { confirmarDuplicado, ...datosPropiedad } = propiedadConConfirmacionDuplicadoSchema.parse({
+        ...alta.propiedad, propietarioId: propietarioPrincipalId,
+      });
+      if (coincidencias.length > 0 && !confirmarDuplicado) {
+        throw new DomainError("PROPERTY_POSSIBLE_DUPLICATE", "Ya existe una propiedad con esta dirección o ubicación. Selecciónala para agregar unidades o confirma que es un inmueble distinto.");
+      }
+      return transaction.propiedad.create({
+        data: { ...datosPropiedad, direccionNormalizada: normalizarDireccion(datosPropiedad.direccion) },
+      });
+    })();
+    const propietarioPrincipalId = propiedad.propietarioId;
+    const direccionNormalizada = propiedad.direccionNormalizada;
+    const unidadesExistentes = await transaction.unidad.findMany({
+      where: { propiedadId: propiedad.id }, select: { identificador: true },
+    });
+    const identificadores = new Set(unidadesExistentes.map((unidad) => unidad.identificador.trim().toLocaleLowerCase("es-MX")));
+
+    if (fotos.length > 0) {
+      await transaction.archivoExpediente.createMany({
+        data: fotos.map((foto, orden) => ({
+          propiedadId: propiedad.id,
+          tipo: "FOTO_PROPIEDAD" as const,
+          url: foto.url,
+          nombre: foto.nombre,
+          mimeType: foto.mimeType,
+          tamanoBytes: foto.tamanoBytes,
+          orden,
+        })),
+      });
+    }
+
+    for (const unidadAsistida of alta.unidades) {
+      const propietarioId = await resolverPropietarioEnAsistente(
+        unidadAsistida.propietario,
+        transaction,
+        user.id,
+        propietarioPrincipalId,
+      );
+      const unidadValidada = unidadInputSchema.parse({
+        ...unidadAsistida.datos,
+        propiedadId: propiedad.id,
+        propietarioId,
+      });
+      const identificador = unidadValidada.identificador.trim().toLocaleLowerCase("es-MX");
+      if (identificadores.has(identificador)) {
+        throw new DomainError("UNIT_IDENTIFIER_CONFLICT", `La unidad ${unidadValidada.identificador} ya existe en esta propiedad. Usa un identificador distinto.`);
+      }
+      identificadores.add(identificador);
+      const unidad = await transaction.unidad.create({
+        data: {
+          ...unidadValidada,
+          atributos: normalizarAtributos(unidadValidada.atributos),
+          amenidades: normalizarAtributos(unidadValidada.amenidades),
+        },
+      });
+
+      if (unidadAsistida.contrato) {
+        const contrato = contratoInputSchema.parse({
+          ...unidadAsistida.contrato,
+          unidadId: unidad.id,
+          estado: EstadoContrato.ACTIVO,
+        });
+        await crearContratoEnTransaccion(transaction, contrato, user.id);
+      }
+    }
+
+    if (existenteId) {
+      await registrarAuditoria(transaction, {
+        usuarioSistemaId: user.id,
+        accion: "AGREGAR_UNIDADES",
+        entidad: "Propiedad",
+        entidadId: propiedad.id,
+        despues: { unidades: alta.unidades.map((unidad) => String(unidad.datos.identificador)) },
+      });
+    }
+    if (!existenteId && coincidencias.length > 0) {
+      await registrarAuditoria(transaction, {
+        usuarioSistemaId: user.id,
+        accion: "CREAR_DUPLICADO_CONFIRMADO",
+        entidad: "Propiedad",
+        entidadId: propiedad.id,
+        antes: { coincidencias },
+        despues: { direccion: propiedad.direccion, direccionNormalizada },
+      });
+    }
+
+    return propiedad;
+  });
+}
+
 export async function actualizarPropiedad(
   propiedadId: string,
   input: unknown,
@@ -453,10 +614,12 @@ function resumenPropiedadParaUnificacion(propiedad: {
 export async function unificarPropiedades(
   primeraPropiedadId: string,
   segundaPropiedadId: string,
+  ubicacionInput?: unknown,
 ) {
   const { user } = await requireSystemRole(WRITE_ROLES);
   const firstId = recordIdSchema.parse(primeraPropiedadId);
   const secondId = recordIdSchema.parse(segundaPropiedadId);
+  const ubicacion = ubicacionInput === undefined ? undefined : ubicacionParaUnificarSchema.parse(ubicacionInput);
   if (firstId === secondId) {
     throw new DomainError("PROPERTY_MERGE_SAME", "Selecciona dos propiedades distintas para unificarlas.");
   }
@@ -493,12 +656,9 @@ export async function unificarPropiedades(
       const difference = a.creadoEn.getTime() - b.creadoEn.getTime();
       return difference || a.id.localeCompare(b.id);
     });
-    const criterios = criteriosCoincidenciaPropiedad({
-      direccionNormalizada: principal.direccionNormalizada,
-      googlePlaceId: principal.googlePlaceId,
-      candidataDireccionNormalizada: duplicada.direccionNormalizada,
-      candidataGooglePlaceId: duplicada.googlePlaceId,
-    });
+    const actual = properties.find((property) => property.id === firstId)!;
+    const candidata = properties.find((property) => property.id === secondId)!;
+    const criterios = criteriosUnificacion(actual, candidata, ubicacion);
     if (criterios.length === 0) {
       throw new DomainError("PROPERTY_NOT_DUPLICATE", "Las propiedades no coinciden por dirección ni por ubicación de Google Maps.");
     }
@@ -514,6 +674,12 @@ export async function unificarPropiedades(
       );
     }
 
+    if (ubicacion) {
+      await transaction.propiedad.update({
+        where: { id: principal.id },
+        data: { ...ubicacion, direccionNormalizada: normalizarDireccion(ubicacion.direccion) },
+      });
+    }
     const maxPhotoOrder = principal.archivos.reduce((maximum, file) => Math.max(maximum, file.orden), -1);
     await Promise.all(duplicada.archivos.map((file, index) => transaction.archivoExpediente.update({
       where: { id: file.id },
@@ -539,10 +705,16 @@ export async function unificarPropiedades(
         propiedadConservadaId: principal.id,
         propiedadEliminadaId: duplicada.id,
         criterios,
+        ubicacionConfirmada: ubicacion ?? null,
       },
     });
 
-    return { propiedadId: principal.id, propiedadEliminadaId: duplicada.id };
+    return {
+      propiedadId: principal.id,
+      propiedadEliminadaId: duplicada.id,
+      unidadesMovidas: duplicada.unidades.length,
+      totalUnidades: principal.unidades.length + duplicada.unidades.length,
+    };
   });
 }
 
@@ -761,6 +933,49 @@ export async function obtenerContrato(contratoId: string) {
   });
 }
 
+async function crearContratoEnTransaccion(
+  transaction: Prisma.TransactionClient,
+  data: ContratoInput,
+  usuarioSistemaId: string,
+) {
+  const startDate = toDatabaseDate(data.fechaInicio);
+  const endDate = toDatabaseDate(data.fechaFin);
+  const period = currentReceiptPeriod();
+  const guarantee = normalizarGarantia(data);
+
+  const contract = await transaction.contrato.create({
+    data: {
+      ...guarantee,
+      fechaInicio: startDate,
+      fechaFin: endDate,
+    },
+  });
+  await registrarAuditoria(transaction, { usuarioSistemaId, accion: "CREAR", entidad: "Contrato", entidadId: contract.id, despues: { estado: contract.estado, fechaInicio: contract.fechaInicio.toISOString(), fechaFin: contract.fechaFin.toISOString(), rentaMensualBase: contract.rentaMensualBase.toString(), diaPago: contract.diaPago } });
+
+  if (
+    data.estado === EstadoContrato.ACTIVO &&
+    contractOverlapsPeriod({ startDate, endDate, period })
+  ) {
+    const dueDate = calculateReceiptDueDate(period, data.diaPago);
+    await transaction.recibo.create({
+      data: {
+        contratoId: contract.id,
+        periodo: period,
+        fechaVencimiento: dueDate,
+        monto: data.rentaMensualBase,
+        cargoFijo: data.cargoFijoMensual,
+        estatus: calculateReceiptStatus({
+          currentDate: currentCollectionDate(),
+          dueDate,
+          paid: false,
+        }),
+      },
+    });
+  }
+
+  return contract;
+}
+
 export async function crearContrato(input: ContratoInput) {
   const { user } = await requireSystemRole(WRITE_ROLES);
   const data = contratoInputSchema.parse(input);
@@ -773,44 +988,7 @@ export async function crearContrato(input: ContratoInput) {
     await asegurarUnidadSinContratoActivo(data.unidadId);
   }
 
-  const startDate = toDatabaseDate(data.fechaInicio);
-  const endDate = toDatabaseDate(data.fechaFin);
-  const period = currentReceiptPeriod();
-  const guarantee = normalizarGarantia(data);
-
-  return prisma.$transaction(async (transaction) => {
-    const contract = await transaction.contrato.create({
-      data: {
-        ...guarantee,
-        fechaInicio: startDate,
-        fechaFin: endDate,
-      },
-    });
-    await registrarAuditoria(transaction, { usuarioSistemaId: user.id, accion: "CREAR", entidad: "Contrato", entidadId: contract.id, despues: { estado: contract.estado, fechaInicio: contract.fechaInicio.toISOString(), fechaFin: contract.fechaFin.toISOString(), rentaMensualBase: contract.rentaMensualBase.toString(), diaPago: contract.diaPago } });
-
-    if (
-      data.estado === EstadoContrato.ACTIVO &&
-      contractOverlapsPeriod({ startDate, endDate, period })
-    ) {
-      const dueDate = calculateReceiptDueDate(period, data.diaPago);
-      await transaction.recibo.create({
-        data: {
-          contratoId: contract.id,
-          periodo: period,
-          fechaVencimiento: dueDate,
-          monto: data.rentaMensualBase,
-          cargoFijo: data.cargoFijoMensual,
-          estatus: calculateReceiptStatus({
-            currentDate: currentCollectionDate(),
-            dueDate,
-            paid: false,
-          }),
-        },
-      });
-    }
-
-    return contract;
-  });
+  return prisma.$transaction((transaction) => crearContratoEnTransaccion(transaction, data, user.id));
 }
 
 export async function actualizarContrato(

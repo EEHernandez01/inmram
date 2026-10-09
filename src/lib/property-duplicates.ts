@@ -1,5 +1,18 @@
 export type CriterioCoincidenciaPropiedad = "DIRECCION" | "GOOGLE_PLACE";
 
+export function criteriosUnificacion(
+  actual: { direccionNormalizada: string; googlePlaceId: string | null },
+  candidata: { direccionNormalizada: string; googlePlaceId: string | null },
+  ubicacion?: { direccion: string; googlePlaceId: string | null },
+) {
+  return criteriosCoincidenciaPropiedad({
+    direccionNormalizada: ubicacion ? normalizarDireccion(ubicacion.direccion) : actual.direccionNormalizada,
+    googlePlaceId: ubicacion ? ubicacion.googlePlaceId : actual.googlePlaceId,
+    candidataDireccionNormalizada: candidata.direccionNormalizada,
+    candidataGooglePlaceId: candidata.googlePlaceId,
+  });
+}
+
 export function normalizarDireccion(value: string) {
   return value
     .normalize("NFD")

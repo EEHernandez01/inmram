@@ -4,17 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import { PlacePreview } from "@/components/maps/place-preview";
 import { Input } from "@/components/ui/form-controls";
-
-type AddressParts = {
-  calle: string;
-  numero: string;
-  numeroInterior: string;
-  colonia: string;
-  municipio: string;
-  ciudad: string;
-  estado: string;
-  codigoPostal: string;
-};
+import { addressPartsFromPlace, formatAddress, type AddressComponent, type AddressParts } from "@/lib/maps/address";
 
 type Suggestion = {
   id: string;
@@ -84,14 +74,6 @@ type Place = {
   fetchFields: (request: { fields: string[] }) => Promise<void>;
 };
 
-type AddressComponent = {
-  longText?: string;
-  shortText?: string;
-  long_name?: string;
-  short_name?: string;
-  types: string[];
-};
-
 const emptyAddressParts: AddressParts = {
   calle: "",
   numero: "",
@@ -106,6 +88,8 @@ const emptyAddressParts: AddressParts = {
 type LocationChange = {
   direccion: string;
   googlePlaceId: string | null;
+  latitud: string | null;
+  longitud: string | null;
 };
 
 let mapsLoader: Promise<PlacesLibrary> | null = null;
@@ -154,60 +138,6 @@ function loadPlacesLibrary(apiKey: string) {
   });
 
   return mapsLoader;
-}
-
-function componentText(component: AddressComponent | undefined, short = false) {
-  if (!component) return "";
-  return (short ? component.shortText ?? component.short_name : component.longText ?? component.long_name) ?? "";
-}
-
-function findComponent(components: AddressComponent[] | undefined, type: string) {
-  return components?.find((component) => component.types.includes(type));
-}
-
-function addressPartsFromPlace(place: Place): AddressParts {
-  const components = place.addressComponents ?? [];
-  const municipality =
-    findComponent(components, "administrative_area_level_2") ??
-    findComponent(components, "locality") ??
-    findComponent(components, "sublocality_level_1");
-  const city =
-    findComponent(components, "locality") ??
-    findComponent(components, "postal_town") ??
-    findComponent(components, "administrative_area_level_2");
-
-  return {
-    calle: componentText(findComponent(components, "route")),
-    numero: componentText(findComponent(components, "street_number")),
-    numeroInterior: componentText(findComponent(components, "subpremise")),
-    colonia:
-      componentText(findComponent(components, "neighborhood")) ||
-      componentText(findComponent(components, "sublocality_level_1")) ||
-      componentText(findComponent(components, "sublocality")),
-    municipio: componentText(municipality),
-    ciudad: componentText(city),
-    estado: componentText(findComponent(components, "administrative_area_level_1")),
-    codigoPostal: componentText(findComponent(components, "postal_code")),
-  };
-}
-
-function formatAddress(parts: AddressParts, fallback = "") {
-  const street = [
-    parts.calle,
-    parts.numero,
-    parts.numeroInterior ? `Int. ${parts.numeroInterior}` : "",
-  ].filter(Boolean).join(" ");
-  const address = [
-    street,
-    parts.colonia,
-    parts.municipio,
-    parts.ciudad,
-    parts.estado,
-    parts.codigoPostal ? `C.P. ${parts.codigoPostal}` : "",
-    "Mexico",
-  ].filter(Boolean).join(", ");
-
-  return address || fallback;
 }
 
 function coordinates(location: Place["location"]) {
@@ -334,6 +264,9 @@ export function LocationPicker({ defaults, enabled, onLocationChange }: {
       if (!nextCoordinates) throw new Error("El lugar no tiene coordenadas.");
 
       setAddressParts(nextParts);
+      if (!nextParts.municipio) {
+        setMessage("Google Maps no identifico el municipio o alcaldia. Completa ese campo manualmente.");
+      }
       setSelection({
         placeId: place.id ?? suggestion.id,
         address: nextAddress,
@@ -342,7 +275,12 @@ export function LocationPicker({ defaults, enabled, onLocationChange }: {
         googleMapsUri: place.googleMapsURI,
       });
       setCompleteAddress(nextAddress);
-      onLocationChange?.({ direccion: nextAddress, googlePlaceId: place.id ?? suggestion.id });
+      onLocationChange?.({
+        direccion: nextAddress,
+        googlePlaceId: place.id ?? suggestion.id,
+        latitud: nextCoordinates.latitude.toFixed(6),
+        longitud: nextCoordinates.longitude.toFixed(6),
+      });
       setActiveIndex(-1);
       sessionToken.current = null;
     } catch {
@@ -355,7 +293,7 @@ export function LocationPicker({ defaults, enabled, onLocationChange }: {
   function updateCompleteAddress(value: string) {
     setAddressParts({ ...emptyAddressParts, calle: value });
     setCompleteAddress(value);
-    onLocationChange?.({ direccion: value, googlePlaceId: null });
+    onLocationChange?.({ direccion: value, googlePlaceId: null, latitud: null, longitud: null });
     setSelection(null);
     setSuggestions([]);
     setActiveIndex(-1);
@@ -369,7 +307,7 @@ export function LocationPicker({ defaults, enabled, onLocationChange }: {
     setAddressParts(nextParts);
     const nextAddress = formatAddress(nextParts, completeAddress);
     setCompleteAddress(nextAddress);
-    onLocationChange?.({ direccion: nextAddress, googlePlaceId: null });
+    onLocationChange?.({ direccion: nextAddress, googlePlaceId: null, latitud: null, longitud: null });
     setSelection(null);
     setSuggestions([]);
     setActiveIndex(-1);

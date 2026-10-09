@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
+import { MergePropertyButton } from "@/components/forms/merge-property-button";
 import { LocationPicker } from "@/components/forms/location-picker";
 import { PropertyPhotoInput } from "@/components/forms/property-photo-input";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, Select } from "@/components/ui/form-controls";
 import { FormStatus } from "@/components/ui/form-status";
+import type { UbicacionParaUnificar } from "@/lib/validation/property-merge";
 import { MoneyInput } from "@/components/ui/money-input";
 
 const defaultMoneyValue = "0.00";
@@ -61,7 +63,7 @@ export function PropertyForm({ action = "/api/propiedades", defaults, existingPh
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string>();
   const [duplicateError, setDuplicateError] = useState<string>();
-  const [location, setLocation] = useState({ direccion: defaults?.direccion ?? "", googlePlaceId: defaults?.googlePlaceId ?? null as string | null });
+  const [location, setLocation] = useState<UbicacionParaUnificar>({ direccion: defaults?.direccion ?? "", googlePlaceId: defaults?.googlePlaceId ?? null, latitud: defaults?.latitud ?? null, longitud: defaults?.longitud ?? null });
   const [coincidencias, setCoincidencias] = useState<CoincidenciaPropiedad[]>([]);
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
   const [duplicateConfirmed, setDuplicateConfirmed] = useState(false);
@@ -104,7 +106,7 @@ export function PropertyForm({ action = "/api/propiedades", defaults, existingPh
     };
   }, [location, propertyId]);
 
-  function handleLocationChange(nextLocation: { direccion: string; googlePlaceId: string | null }) {
+  function handleLocationChange(nextLocation: UbicacionParaUnificar) {
     setLocation(nextLocation);
     setDuplicateConfirmed(false);
     setDuplicateError(undefined);
@@ -175,7 +177,7 @@ export function PropertyForm({ action = "/api/propiedades", defaults, existingPh
 
   return (
     <form action={action} aria-busy={isUploading} className="space-y-6" onSubmit={handleSubmit} {...transportProps}>
-      <section className="rounded-xl border border-border p-4 sm:p-5"><div className="mb-5"><h2 className="font-serif text-lg font-semibold text-ink">Información de la propiedad</h2></div>{owners ? <div className="mb-5"><Field label="Propietario"><Select defaultValue={defaults?.propietarioId} name="propietarioId" required><option value="">Selecciona un propietario</option>{owners.map((owner) => <option key={owner.value} value={owner.value}>{owner.nombre}</option>)}</Select></Field></div> : null}<LocationPicker defaults={{ address: defaults?.direccion, googlePlaceId: defaults?.googlePlaceId, latitude: defaults?.latitud, longitude: defaults?.longitud }} enabled={placesEnabled} onLocationChange={handleLocationChange} />{coincidencias.length > 0 ? <Alert className="mt-5" variant="warning"><p className="font-semibold">Ya hay {coincidencias.length === 1 ? "una propiedad" : "propiedades"} con esta dirección o ubicación.</p><ul className="mt-2 space-y-1">{coincidencias.map((property) => <li key={property.id}><Link className="font-semibold underline" href={`/propiedades/${property.id}`}>{property.direccion}</Link> · {property.unidades} {property.unidades === 1 ? "unidad" : "unidades"}{property.archivadaEn ? " · Archivada" : ""}</li>)}</ul><p className="mt-3">Para registrar otro espacio, abre la ficha existente y selecciona <strong>Nueva unidad</strong>.</p><label className="mt-3 flex items-start gap-2"><input checked={duplicateConfirmed} className="mt-1" name="confirmarDuplicado" onChange={(event) => setDuplicateConfirmed(event.target.checked)} type="checkbox" value="1" /><span>Confirmo que es un inmueble distinto y deseo crear otra ficha.</span></label></Alert> : <input name="confirmarDuplicado" type="hidden" value="" />}</section>
+      <section className="rounded-xl border border-border p-4 sm:p-5"><div className="mb-5"><h2 className="font-serif text-lg font-semibold text-ink">Información de la propiedad</h2></div>{owners ? <div className="mb-5"><Field label="Propietario"><Select defaultValue={defaults?.propietarioId} name="propietarioId" required><option value="">Selecciona un propietario</option>{owners.map((owner) => <option key={owner.value} value={owner.value}>{owner.nombre}</option>)}</Select></Field></div> : null}<LocationPicker defaults={{ address: defaults?.direccion, googlePlaceId: defaults?.googlePlaceId, latitude: defaults?.latitud, longitude: defaults?.longitud }} enabled={placesEnabled} onLocationChange={handleLocationChange} />{coincidencias.length > 0 ? <Alert className="mt-5" variant="warning"><p className="font-semibold">Ya hay {coincidencias.length === 1 ? "una propiedad" : "propiedades"} con esta dirección o ubicación.</p><ul className="mt-2 space-y-1">{coincidencias.map((property) => <li key={property.id}><Link className="font-semibold underline" href={`/propiedades/${property.id}`}>{property.direccion}</Link> · {property.unidades} {property.unidades === 1 ? "unidad" : "unidades"}{property.archivadaEn ? " · Archivada" : <Link className="ml-3 font-semibold underline" href={`/propiedades/${property.id}/unidades/nueva`}>Agregar unidad</Link>}{propertyId && !property.archivadaEn ? <div className="mt-2"><MergePropertyButton action={`/api/propiedades/${propertyId}/unificar`} duplicatePropertyId={property.id} duplicateAddress={property.direccion} ubicacion={location} fromEditor /></div> : null}</li>)}</ul><p className="mt-3">Si son fichas del mismo inmueble, selecciona <strong>Unificar fichas</strong>. Para registrar un espacio nuevo, selecciona <strong>Agregar unidad</strong>.</p><label className="mt-3 flex items-start gap-2"><input checked={duplicateConfirmed} className="mt-1" name="confirmarDuplicado" onChange={(event) => setDuplicateConfirmed(event.target.checked)} type="checkbox" value="1" /><span>Confirmo que es un inmueble distinto y deseo crear otra ficha.</span></label></Alert> : <input name="confirmarDuplicado" type="hidden" value="" />}</section>
       <section className="rounded-xl border border-border p-4 sm:p-5"><div className="mb-5"><h2 className="font-serif text-lg font-semibold text-ink">Valores y gastos anuales</h2><p className="mt-1 text-sm text-ink-secondary">Captura importes en pesos mexicanos.</p></div><div className="grid gap-5 sm:grid-cols-2"><Field hint="Valor registrado para fines fiscales." label="Valor catastral"><MoneyInput defaultValue={defaults?.valorCatastral ?? defaultMoneyValue} name="valorCatastral" required /></Field><Field hint="Valor estimado total del inmueble." label="Valor comercial total"><MoneyInput defaultValue={defaults?.valorComercialTotal ?? defaultMoneyValue} name="valorComercialTotal" required /></Field><Field hint="Pago total estimado por año." label="Predial anual"><MoneyInput defaultValue={defaults?.predialAnual ?? defaultMoneyValue} name="predialAnual" required /></Field><Field hint="Cuotas y servicios comunes por año." label="Mantenimiento anual"><MoneyInput defaultValue={defaults?.mantenimientoAnual ?? defaultMoneyValue} name="mantenimientoAnual" required /></Field></div></section>
       <section className="rounded-xl border border-border p-4 sm:p-5"><div className="mb-5"><h2 className="font-serif text-lg font-semibold text-ink">Fotos</h2><p className="mt-1 text-sm text-ink-secondary">Una galería ayuda a identificar rápidamente el inmueble.</p></div><PropertyPhotoInput existingPhotos={existingPhotos} inputRef={photoInputRef} /></section>
       <FormStatus message={duplicateError ?? uploadError} />

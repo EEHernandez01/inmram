@@ -9,6 +9,7 @@ import {
 import { propertyReportFilterSchema } from "../src/lib/validation/reports.ts";
 import { paymentInputSchema, paymentReversalInputSchema } from "../src/lib/validation/collection.ts";
 import { propertyPhotoUploadSchema } from "../src/lib/validation/property-photos.ts";
+import { altaPropiedadAsistidaSchema } from "../src/lib/validation/property-onboarding.ts";
 import { propietarioCuentaSchema, propietarioInputSchema } from "../src/lib/validation/owners.ts";
 import { canManageOperations, canViewReports } from "../src/lib/auth/role-policy.ts";
 import { RolUsuario } from "../src/generated/prisma/enums.ts";
@@ -150,6 +151,26 @@ test("acepta únicamente referencias de fotos públicas de Vercel Blob", () => {
     propertyPhotoUploadSchema.safeParse({ ...photo, tamanoBytes: 4 * 1024 * 1024 + 1 }).success,
     false,
   );
+});
+
+test("acepta propietarios nuevos o existentes y contratos opcionales en el alta asistida", () => {
+  const input = {
+    propiedad: { direccion: "Av. Reforma 100" },
+    propietario: { modo: "NUEVO", propietario: { nombre: "Inmuebles Reforma" } },
+    unidades: [{
+      datos: { identificador: "101", tipo: "DEPARTAMENTO" },
+      propietario: { modo: "PRINCIPAL" },
+      contrato: null,
+    }, {
+      datos: { identificador: "Local A", tipo: "LOCAL_COMERCIAL" },
+      propietario: { modo: "EXISTENTE", propietarioId: unitId },
+      contrato: { arrendatario: "Ana Pérez" },
+    }],
+  };
+
+  assert.equal(altaPropiedadAsistidaSchema.safeParse(input).success, true);
+  assert.equal(altaPropiedadAsistidaSchema.safeParse({ ...input, propietario: { modo: "EXISTENTE", propietarioId: "no-es-uuid" } }).success, false);
+  assert.equal(altaPropiedadAsistidaSchema.safeParse({ ...input, unidades: [{ ...input.unidades[0], propietario: { modo: "OTRO" } }] }).success, false);
 });
 
 test("valida el catálogo de propietarios y normaliza contactos opcionales", () => {
