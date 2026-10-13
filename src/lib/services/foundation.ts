@@ -249,6 +249,7 @@ export type OpcionesListadoPropiedades = {
   propietarioId?: string;
   disponibilidad?: FiltroDisponibilidadPropiedad;
   orden?: OrdenPropiedades;
+  paginacion?: { pagina: number; limite: number };
 };
 
 export async function listarPropiedades({
@@ -257,6 +258,7 @@ export async function listarPropiedades({
   propietarioId,
   disponibilidad = "TODAS",
   orden = "DIRECCION_ASC",
+  paginacion,
 }: OpcionesListadoPropiedades = {}) {
   await requireSystemRole(READ_ROLES);
   const ownerId = await getOwnerScope();
@@ -284,17 +286,22 @@ export async function listarPropiedades({
   if (disponibilidad === "CON_DISPONIBILIDAD") conditions.push({ unidades: { some: unidadesDisponibles } });
   if (disponibilidad === "SIN_DISPONIBILIDAD") conditions.push({ unidades: { none: unidadesDisponibles } });
 
-  const orderBy = orden === "DIRECCION_DESC"
-    ? { direccion: "desc" as const }
-    : orden === "VALOR_DESC"
-      ? { valorComercialTotal: "desc" as const }
-      : orden === "VALOR_ASC"
-        ? { valorComercialTotal: "asc" as const }
-        : { direccion: "asc" as const };
+  const orderBy = orden === "VALOR_DESC"
+    ? [{ valorComercialTotal: "desc" as const }, { id: "asc" as const }]
+    : orden === "VALOR_ASC"
+      ? [{ valorComercialTotal: "asc" as const }, { id: "asc" as const }]
+      : [{ direccion: orden === "DIRECCION_DESC" ? "desc" as const : "asc" as const }, { id: "asc" as const }];
 
+  const where = { AND: conditions };
+  const total = paginacion ? await prisma.propiedad.count({ where }) : undefined;
+  const paginas = paginacion ? Math.max(1, Math.ceil((total ?? 0) / paginacion.limite)) : 1;
+  const pagina = paginacion ? Math.min(Math.max(1, paginacion.pagina), paginas) : 1;
+  // shortcut: disponibilidad carga todos los resultados filtrados para ordenarlos; mover el cálculo a SQL si el portafolio crece.
   const propiedades = await prisma.propiedad.findMany({
-    where: { AND: conditions },
+    where,
     orderBy,
+    skip: paginacion && orden !== "DISPONIBILIDAD_DESC" ? (pagina - 1) * paginacion.limite : undefined,
+    take: paginacion && orden !== "DISPONIBILIDAD_DESC" ? paginacion.limite : undefined,
     include: {
       propietario: true,
       marca: true,
@@ -304,12 +311,20 @@ export async function listarPropiedades({
     },
   });
 
-  if (orden !== "DISPONIBILIDAD_DESC") return propiedades;
-
-  return propiedades.toSorted((a, b) => {
-    const diferencia = b.unidades.length - a.unidades.length;
-    return diferencia || a.direccion.localeCompare(b.direccion, "es");
-  });
+  const orderedProperties = orden === "DISPONIBILIDAD_DESC"
+    ? propiedades.toSorted((a, b) => {
+      const diferencia = b.unidades.length - a.unidades.length;
+      return diferencia || a.direccion.localeCompare(b.direccion, "es") || a.id.localeCompare(b.id);
+    })
+    : propiedades;
+  return {
+    propiedades: paginacion && orden === "DISPONIBILIDAD_DESC"
+      ? orderedProperties.slice((pagina - 1) * paginacion.limite, pagina * paginacion.limite)
+      : orderedProperties,
+    total: total ?? orderedProperties.length,
+    pagina,
+    paginas,
+  };
 }
 
 export async function listarPropietariosParaFiltroPropiedades({ archivadas = false }: { archivadas?: boolean } = {}) {

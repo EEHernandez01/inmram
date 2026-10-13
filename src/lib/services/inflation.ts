@@ -11,6 +11,7 @@ import { prisma } from "@/lib/db/prisma";
 import { DomainError } from "@/lib/domain/errors";
 import { recordIdSchema } from "@/lib/validation/foundation";
 import { registrarAuditoria } from "@/lib/services/audit";
+import { obtenerSugerenciaInpc } from "@/lib/services/banxico";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import { RenewalProposalDocument } from "@/lib/pdf/renewal-proposal-document";
 import { inflationDate, inflationIndexInputSchema, inflationMonthDate, inflationYearSchema, renewalInputSchema } from "@/lib/validation/inflation";
@@ -25,6 +26,22 @@ export async function guardarIndiceInflacion(input: unknown) {
     await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "GUARDAR", entidad: "IndiceInflacion", entidadId: result.id, despues: { indice: result.indice, mes: data.mes, valor: result.valor.toString(), fechaCorte: result.fechaCorte.toISOString() } });
     return result;
   });
+}
+
+export async function sincronizarIndiceInpcBanxico() {
+  const suggestion = await obtenerSugerenciaInpc();
+  if (!suggestion) return { estado: process.env.BANXICO_SIE_TOKEN?.trim() ? "dato_no_disponible" : "token_no_configurado" };
+
+  const mes = inflationMonthDate(suggestion.month);
+  const existente = await prisma.indiceInflacion.findUnique({ where: { indice_mes: { indice: "INPC", mes } }, select: { valor: true } });
+  if (existente && Number(existente.valor) === Number(suggestion.value)) return { estado: "sin_cambios", mes: suggestion.month };
+
+  await prisma.indiceInflacion.upsert({
+    where: { indice_mes: { indice: "INPC", mes } },
+    create: { indice: "INPC", mes, valor: suggestion.value, fechaCorte: inflationDate(`${suggestion.month}-10`) },
+    update: { valor: suggestion.value, fechaCorte: inflationDate(`${suggestion.month}-10`) },
+  });
+  return { estado: "actualizado", mes: suggestion.month };
 }
 
 export async function obtenerReporteInflacion(anioInput: unknown, indice = "INPC") {

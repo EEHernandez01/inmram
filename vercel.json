@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/cobranza",
       "schedule": "10 6 * * *"
+    },
+    {
+      "path": "/api/cron/inflacion",
+      "schedule": "10 18 * * *"
     }
   ]
 }

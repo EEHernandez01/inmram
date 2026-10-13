@@ -23,7 +23,10 @@ type PropertySearchParams = {
   propietario?: string;
   disponibilidad?: string;
   ordenar?: string;
+  pagina?: string;
 };
+
+const PROPERTY_PAGE_SIZE = 10;
 
 const availabilityOptions: { value: FiltroDisponibilidadPropiedad; label: string }[] = [
   { value: "TODAS", label: "Todas las disponibilidades" },
@@ -47,18 +50,27 @@ function getOrder(value?: string): OrdenPropiedades {
   return orderOptions.some((option) => option.value === value) ? value as OrdenPropiedades : "DIRECCION_ASC";
 }
 
+function getPage(value?: string) {
+  const page = Number(value);
+  return Number.isSafeInteger(page) && page > 0 ? page : 1;
+}
+
 function getPropertiesHref({
   archived,
   buscar,
   propietario,
   disponibilidad,
   ordenar,
+  pagina,
+  pathname = "/propiedades",
 }: {
   archived: boolean;
   buscar?: string;
   propietario?: string;
   disponibilidad?: FiltroDisponibilidadPropiedad;
   ordenar?: OrdenPropiedades;
+  pagina?: number;
+  pathname?: string;
 }) {
   const params = new URLSearchParams();
   if (archived) params.set("estado", "archivadas");
@@ -66,8 +78,9 @@ function getPropertiesHref({
   if (propietario) params.set("propietario", propietario);
   if (disponibilidad && disponibilidad !== "TODAS") params.set("disponibilidad", disponibilidad);
   if (ordenar && ordenar !== "DIRECCION_ASC") params.set("ordenar", ordenar);
+  if (pagina && pagina > 1) params.set("pagina", String(pagina));
   const query = params.toString();
-  return query ? `/propiedades?${query}` : "/propiedades";
+  return query ? `${pathname}?${query}` : pathname;
 }
 
 export default async function PropertiesPage({ searchParams }: { searchParams: Promise<PropertySearchParams> }) {
@@ -77,11 +90,18 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
   const propietario = query.propietario || undefined;
   const disponibilidad = getAvailability(query.disponibilidad);
   const ordenar = getOrder(query.ordenar);
-  const [{ user }, properties, propietarios] = await Promise.all([
+  const requestedPage = getPage(query.pagina);
+  const [{ user }, propertyResult, propietarios] = await Promise.all([
     getSystemUser(),
-    listarPropiedades({ archivadas: archived, busqueda: buscar, propietarioId: propietario, disponibilidad, orden: ordenar }),
+    listarPropiedades({ archivadas: archived, busqueda: buscar, propietarioId: propietario, disponibilidad, orden: ordenar, paginacion: { pagina: requestedPage, limite: PROPERTY_PAGE_SIZE } }),
     listarPropietariosParaFiltroPropiedades({ archivadas: archived }),
   ]);
+  const properties = propertyResult.propiedades;
+  const totalPages = propertyResult.paginas;
+  const firstProperty = propertyResult.total ? (propertyResult.pagina - 1) * PROPERTY_PAGE_SIZE + 1 : 0;
+  const lastProperty = Math.min(propertyResult.pagina * PROPERTY_PAGE_SIZE, propertyResult.total);
+  const firstVisiblePage = Math.max(1, Math.min(propertyResult.pagina - 2, totalPages - 4));
+  const visiblePages = Array.from({ length: Math.min(totalPages, 5) }, (_, index) => firstVisiblePage + index);
   const canWrite = WRITE_ROLES.includes(user.rol as (typeof WRITE_ROLES)[number]);
   const newLink = canWrite ? <Link className="inline-flex rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover" href="/propiedades/nueva">Agregar propiedad</Link> : null;
   const hasFilters = Boolean(buscar || propietario || disponibilidad !== "TODAS" || ordenar !== "DIRECCION_ASC");
@@ -89,9 +109,10 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
   const activeOwnerName = propietarios.find((owner) => owner.id === propietario)?.nombre;
   const availabilityLabel = availabilityOptions.find((option) => option.value === disponibilidad)?.label;
   const orderLabel = orderOptions.find((option) => option.value === ordenar)?.label;
+  const exportLink = !archived ? <a className="inline-flex rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-bg" href={getPropertiesHref({ archived: false, ...currentQuery, pathname: "/api/propiedades/exportar" })}>Exportar XLSX</a> : null;
 
   return <>
-    <PageHeader action={newLink} description={archived ? "Consulta inmuebles archivados y su historial conservado." : "Explora tu portafolio como un catálogo: ubicación, valor y espacios disponibles en una sola vista."} eyebrow="Portafolio inmobiliario" title="Propiedades" />
+    <PageHeader action={exportLink || newLink ? <div className="flex flex-wrap gap-2">{exportLink}{newLink}</div> : null} description={archived ? "Consulta inmuebles archivados y su historial conservado." : "Explora tu portafolio como un catálogo: ubicación, valor y espacios disponibles en una sola vista."} eyebrow="Portafolio inmobiliario" title="Propiedades" />
     <section className="mt-7">
       <nav aria-label="Estado de propiedades" className="mb-5 flex flex-wrap gap-2">
         <Link aria-current={!archived ? "page" : undefined} className={`rounded-pill px-4 py-2 text-sm font-semibold transition-colors ${!archived ? "bg-brand text-white" : "border border-border bg-surface text-ink-secondary hover:border-brand/30 hover:text-brand"}`} href={getPropertiesHref({ archived: false, ...currentQuery })}>Activas</Link>
@@ -126,7 +147,7 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
       ) : null}
       {properties.length === 0 ? <EmptyState action={hasFilters ? <Link className="inline-flex rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover" href={getPropertiesHref({ archived })}>Limpiar filtros</Link> : archived ? undefined : newLink} description={hasFilters ? "No encontramos inmuebles que coincidan con los filtros elegidos." : archived ? "No hay propiedades archivadas." : "Agrega el primer inmueble para comenzar a registrar sus unidades y contratos."} title={hasFilters ? "Sin resultados" : archived ? "Sin propiedades archivadas" : "Tu portafolio está vacío"} /> : <>
         <div className="mb-5 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-ink-secondary"><span className="font-bold text-ink">{properties.length}</span> {properties.length === 1 ? "inmueble encontrado" : "inmuebles encontrados"}</p>
+          <p className="text-sm text-ink-secondary">Mostrando <span className="font-bold text-ink">{firstProperty}–{lastProperty}</span> de <span className="font-bold text-ink">{propertyResult.total}</span> {propertyResult.total === 1 ? "inmueble" : "inmuebles"}</p>
           <p className="text-sm text-ink-secondary">Selecciona una propiedad para ver sus unidades y contratos.</p>
         </div>
         <div className="space-y-5">
@@ -143,6 +164,13 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
           </Link>;
           })}
         </div>
+        {totalPages > 1 ? <nav aria-label="Paginación de propiedades" className="mt-7 flex flex-wrap items-center justify-center gap-2">
+          <Link aria-disabled={propertyResult.pagina === 1} className={`rounded border border-border px-3 py-2 text-sm font-semibold ${propertyResult.pagina === 1 ? "pointer-events-none text-ink-secondary/50" : "text-ink hover:bg-bg"}`} href={getPropertiesHref({ archived, ...currentQuery, pagina: propertyResult.pagina - 1 })} tabIndex={propertyResult.pagina === 1 ? -1 : undefined}>Anterior</Link>
+          {visiblePages.map((page) => page === propertyResult.pagina
+            ? <span aria-current="page" className="rounded bg-brand px-3 py-2 text-sm font-semibold text-white" key={page}>{page}</span>
+            : <Link className="rounded border border-border px-3 py-2 text-sm font-semibold text-ink hover:bg-bg" href={getPropertiesHref({ archived, ...currentQuery, pagina: page })} key={page}>{page}</Link>)}
+          <Link aria-disabled={propertyResult.pagina === totalPages} className={`rounded border border-border px-3 py-2 text-sm font-semibold ${propertyResult.pagina === totalPages ? "pointer-events-none text-ink-secondary/50" : "text-ink hover:bg-bg"}`} href={getPropertiesHref({ archived, ...currentQuery, pagina: propertyResult.pagina + 1 })} tabIndex={propertyResult.pagina === totalPages ? -1 : undefined}>Siguiente</Link>
+        </nav> : null}
       </>}
     </section>
   </>;

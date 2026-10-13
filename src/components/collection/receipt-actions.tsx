@@ -93,10 +93,10 @@ export function ReceiptDocuments({
   receipt,
 }: Omit<ReceiptActionProps, "mobile" | "paymentDate">) {
   return (
-    <div className="mb-3 flex flex-wrap gap-3">
-      <a className="text-sm font-semibold text-brand hover:text-brand-hover" href={`/api/recibos/${receipt.id}/pdf`} rel="noreferrer" target="_blank">Ver PDF</a>
-      {receipt.estatus === EstadoRecibo.PAGADO ? <a className="text-sm font-semibold text-brand hover:text-brand-hover" href={`/api/recibos/${receipt.id}/comprobante-pago`} rel="noreferrer" target="_blank">Comprobante de pago</a> : null}
-      {canWrite && receipt.contrato.estado === "ACTIVO" && receipt.contrato.emailArrendatario && receipt.estatus !== EstadoRecibo.PAGADO ? <form action={`/api/recibos/${receipt.id}/notificar`} method="post"><input name="periodo" type="hidden" value={periodValue} /><ConfirmSubmitButton message={`¿Enviar recordatorio a ${receipt.contrato.emailArrendatario}?`}>Enviar recordatorio</ConfirmSubmitButton></form> : null}
+    <div className="mb-3 flex flex-wrap items-center gap-3">
+      <a className="inline-flex items-center justify-center rounded border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-brand transition-colors hover:bg-bg hover:text-brand-hover" href={`/api/recibos/${receipt.id}/pdf`} rel="noreferrer" target="_blank">Ver solicitud de pago</a>
+      {receipt.estatus === EstadoRecibo.PAGADO ? <a className="text-sm font-semibold text-brand hover:text-brand-hover" href={`/api/recibos/${receipt.id}/comprobante-pago`} rel="noreferrer" target="_blank">Ver comprobante de pago</a> : null}
+      {canWrite && receipt.contrato.estado === "ACTIVO" && receipt.contrato.emailArrendatario && receipt.estatus !== EstadoRecibo.PAGADO ? <form action={`/api/recibos/${receipt.id}/notificar`} method="post"><input name="periodo" type="hidden" value={periodValue} /><ConfirmSubmitButton className="inline-flex items-center justify-center rounded border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-brand transition-colors hover:bg-bg hover:text-brand-hover" message={`¿Enviar recordatorio a ${receipt.contrato.emailArrendatario}?`}>Enviar recordatorio</ConfirmSubmitButton></form> : null}
     </div>
   );
 }
