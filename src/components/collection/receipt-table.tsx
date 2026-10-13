@@ -6,11 +6,21 @@ import type { CollectionReceipt } from "./types";
 
 export function ReceiptTable({ canWrite, paymentDate, periodValue, receipts }: { canWrite: boolean; paymentDate: string; periodValue: string; receipts: CollectionReceipt[] }) {
   return <div className="hidden space-y-4 lg:block">
-    {receipts.map((receipt) => <article className="rounded-card border border-border bg-surface p-6 shadow-sm transition-shadow hover:shadow-md" key={receipt.id}>
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(190px,.75fr)_minmax(180px,.6fr)] xl:items-start">
+    {receipts.map((receipt) => <details className="group rounded-card border border-border bg-surface shadow-sm transition-shadow hover:shadow-md" key={receipt.id}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-5 p-5 [&::-webkit-details-marker]:hidden sm:p-6">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3"><p className="text-base font-bold text-ink">{receipt.contrato.arrendatario}</p><ReceiptBadge status={receipt.estatus} />{receipt.contrato.unidad.propiedad.archivadaEn ? <span className="rounded-full bg-warning-soft px-2.5 py-1 text-xs font-semibold text-warning">Archivada</span> : null}</div>
-          <Link className="mt-2 inline-block text-sm font-semibold text-brand hover:text-brand-hover" href={`/propiedades/${receipt.contrato.unidad.propiedadId}/unidades/${receipt.contrato.unidadId}`}>{receipt.contrato.unidad.propiedad.direccion} · Unidad {receipt.contrato.unidad.identificador}</Link>
+          <p className="mt-2 truncate text-sm text-ink-secondary">{receipt.contrato.unidad.propiedad.direccion} · Unidad {receipt.contrato.unidad.identificador}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-5">
+          <div className="text-right"><p className="text-xs font-semibold uppercase tracking-wide text-ink-secondary">Saldo pendiente</p><p className={receipt.saldoPendiente > 0 ? "mt-1 text-lg font-bold text-danger [font-variant-numeric:tabular-nums]" : "mt-1 text-lg font-bold text-success [font-variant-numeric:tabular-nums]"}>{formatCurrency(receipt.saldoPendiente)}</p><p className="mt-1 text-xs text-ink-secondary [font-variant-numeric:tabular-nums]">Total {formatCurrency(receipt.total)}</p></div>
+          <span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center text-ink-secondary"><svg className="size-4 origin-center transition-transform duration-200 ease-out group-open:rotate-180" fill="none" viewBox="0 0 20 20"><path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" /></svg></span>
+        </div>
+      </summary>
+      <div className="border-t border-border p-5 sm:p-6">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(190px,.75fr)_minmax(180px,.6fr)] xl:items-start">
+        <div className="min-w-0">
+          <Link className="mt-2 inline-block text-sm font-semibold text-brand hover:text-brand-hover" href={`/propiedades/${receipt.contrato.unidad.propiedadId}/unidades/${receipt.contrato.unidadId}`}>Ver inmueble y unidad</Link>
         </div>
         <div className="border-l-0 border-border xl:border-l xl:pl-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-secondary">Vencimiento</p><p className="mt-1 text-sm font-semibold text-ink">{formatDate(receipt.fechaVencimiento)}</p>
@@ -27,6 +37,7 @@ export function ReceiptTable({ canWrite, paymentDate, periodValue, receipts }: {
         <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-secondary">Documentos y seguimiento</p><ReceiptDocuments canWrite={canWrite && !receipt.contrato.unidad.propiedad.archivadaEn} periodValue={periodValue} receipt={receipt} /></div>
         <div className="min-w-[330px]"><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-secondary">Registrar movimiento</p><ReceiptAction canWrite={canWrite && !receipt.contrato.unidad.propiedad.archivadaEn} paymentDate={paymentDate} periodValue={periodValue} receipt={receipt} /></div>
       </div>
-    </article>)}
+      </div>
+    </details>)}
   </div>;
 }

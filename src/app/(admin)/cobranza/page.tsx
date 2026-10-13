@@ -6,7 +6,7 @@ import { ReceiptTable } from "@/components/collection/receipt-table";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Field, Input, Select } from "@/components/ui/form-controls";
+import { Field, Input } from "@/components/ui/form-controls";
 import { PageHeader } from "@/components/ui/page-header";
 import { getSystemUser, WRITE_ROLES } from "@/lib/auth/authorization";
 import {
@@ -22,6 +22,8 @@ import {
   receiptStatusFilterSchema,
 } from "@/lib/validation/collection";
 
+const RECEIPTS_PER_PAGE = 20;
+
 export default async function CollectionPage({
   searchParams,
 }: {
@@ -32,6 +34,8 @@ export default async function CollectionPage({
     generados?: string;
     notificado?: string;
     pago?: string;
+    buscar?: string;
+    pagina?: string;
     periodo?: string;
   }>;
 }) {
@@ -43,7 +47,10 @@ export default async function CollectionPage({
   const periodValue = receiptPeriodValue(period);
   const parsedStatus = receiptStatusFilterSchema.safeParse(query.estatus);
   const status = parsedStatus.success ? parsedStatus.data : undefined;
-  const { receipts, summary } = await listarCobranzaMensual({ period, status });
+  const search = query.buscar?.trim().slice(0, 100) || undefined;
+  const requestedPage = Number(query.pagina);
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const { receipts, summary, counts, pagination } = await listarCobranzaMensual({ period, status, search, pagination: { pagina: page, limite: RECEIPTS_PER_PAGE } });
   const canWrite = WRITE_ROLES.includes(
     user.rol as (typeof WRITE_ROLES)[number],
   );
@@ -56,16 +63,24 @@ export default async function CollectionPage({
     ["Tasa de morosidad", formatPercent(summary.tasaMorosidad), "text-danger"],
   ] as const;
   const statusFilters = [
-    { label: "Todos", value: undefined },
-    { label: "Por cobrar", value: EstadoRecibo.PENDIENTE },
-    { label: "Vencidos", value: EstadoRecibo.VENCIDO },
-    { label: "Pagados", value: EstadoRecibo.PAGADO },
+    { label: "Todos", value: undefined, count: counts?.todos ?? 0 },
+    { label: "Por cobrar", value: EstadoRecibo.PENDIENTE, count: counts?.pendientes ?? 0 },
+    { label: "Vencidos", value: EstadoRecibo.VENCIDO, count: counts?.vencidos ?? 0 },
+    { label: "Pagados", value: EstadoRecibo.PAGADO, count: counts?.pagados ?? 0 },
   ] as const;
-  const collectionUrl = (nextStatus?: EstadoRecibo) => {
-    const params = new URLSearchParams({ periodo: periodValue });
+  const defaultPeriodValue = receiptPeriodValue(currentReceiptPeriod());
+  const collectionUrl = (nextStatus?: EstadoRecibo, nextPage = 1, nextSearch: string | null | undefined = search, nextPeriod = periodValue) => {
+    const params = new URLSearchParams({ periodo: nextPeriod });
     if (nextStatus) params.set("estatus", nextStatus);
+    if (nextSearch) params.set("buscar", nextSearch);
+    if (nextPage > 1) params.set("pagina", String(nextPage));
     return `/cobranza?${params.toString()}`;
   };
+  const hasFilters = Boolean(search || status || periodValue !== defaultPeriodValue);
+  const firstReceipt = pagination && pagination.total > 0 ? (pagination.pagina - 1) * RECEIPTS_PER_PAGE + 1 : 0;
+  const lastReceipt = Math.min((pagination?.pagina ?? 1) * RECEIPTS_PER_PAGE, pagination?.total ?? 0);
+  const firstVisiblePage = Math.max(1, Math.min((pagination?.pagina ?? 1) - 2, (pagination?.paginas ?? 1) - 4));
+  const visiblePages = Array.from({ length: Math.min(pagination?.paginas ?? 1, 5) }, (_, index) => firstVisiblePage + index);
 
   return (
     <>
@@ -118,39 +133,42 @@ export default async function CollectionPage({
           <div>
             <p className="text-sm font-semibold text-ink">Explora los pagos del periodo</p>
             <p className="mt-1 text-sm text-ink-secondary">Empieza por los vencidos y registra un pago directamente desde cada recibo.</p>
-            <nav aria-label="Filtrar cobranza por estatus" className="mt-4 flex flex-wrap gap-2">
+            <nav aria-label="Filtrar recibos por estatus" className="mt-4 flex flex-wrap gap-2">
               {statusFilters.map((filter) => {
                 const selected = (filter.value ?? undefined) === status;
-                return <Link className={`rounded-pill px-3 py-1.5 text-sm font-semibold transition-colors ${selected ? "bg-brand text-white" : "bg-bg text-ink-secondary hover:bg-brand-soft hover:text-brand"}`} href={collectionUrl(filter.value)} key={filter.label}>{filter.label}</Link>;
+                return <Link aria-current={selected ? "page" : undefined} className={`inline-flex items-center gap-2 rounded-pill px-3 py-1.5 text-sm font-semibold transition-colors ${selected ? "bg-brand text-white" : "bg-bg text-ink-secondary hover:bg-brand-soft hover:text-brand"}`} href={collectionUrl(filter.value)} key={filter.label}>{filter.label}<span className={selected ? "rounded-pill bg-white/20 px-2 py-0.5 text-xs" : "rounded-pill bg-surface px-2 py-0.5 text-xs"}>{filter.count}</span></Link>;
               })}
             </nav>
           </div>
-          <form className="flex flex-col gap-3 sm:flex-row sm:items-end" method="get">
-          <Field label="Periodo">
-            <Input defaultValue={periodValue} name="periodo" type="month" />
-          </Field>
-          <Field label="Estatus">
-            <Select defaultValue={status ?? ""} name="estatus">
-              <option value="">Todos</option>
-              {Object.values(EstadoRecibo).map((value) => (
-                <option key={value} value={value}>
-                  {receiptStatusLabels[value]}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Button className="sm:self-end" type="submit" variant="secondary">
-            Aplicar filtros
-          </Button>
+          <form action="/cobranza" className="flex flex-col gap-3 sm:flex-row sm:items-end" method="get">
+            {status ? <input name="estatus" type="hidden" value={status} /> : null}
+            <Field label="Buscar recibo">
+              <div className="relative">
+                <svg aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-brand" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+                <Input className="h-11 pl-9" defaultValue={search} maxLength={100} name="buscar" placeholder="Inquilino, dirección o unidad" type="search" />
+              </div>
+            </Field>
+            <Field label="Periodo">
+              <Input defaultValue={periodValue} name="periodo" type="month" />
+            </Field>
+            <div className="flex items-end gap-2">
+              <Button className="sm:self-end" type="submit" variant="secondary">Aplicar</Button>
+              {hasFilters ? <Link className="inline-flex h-11 items-center justify-center rounded border border-border bg-surface px-3 text-sm font-semibold text-ink hover:bg-bg" href="/cobranza">Limpiar</Link> : null}
+            </div>
           </form>
         </div>
+        {search || periodValue !== defaultPeriodValue ? <nav aria-label="Filtros activos" className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">
+          <span className="text-xs font-semibold text-ink-secondary">Activos:</span>
+          {search ? <Link aria-label={`Quitar búsqueda: ${search}`} className="rounded-pill bg-brand-soft px-3 py-1.5 text-xs font-semibold text-brand" href={collectionUrl(status, 1, null)}>Búsqueda: {search} <span aria-hidden="true">×</span></Link> : null}
+          {periodValue !== defaultPeriodValue ? <Link aria-label="Quitar filtro de periodo" className="rounded-pill bg-brand-soft px-3 py-1.5 text-xs font-semibold text-brand" href={collectionUrl(status, 1, search, defaultPeriodValue)}>Periodo: {periodValue} <span aria-hidden="true">×</span></Link> : null}
+        </nav> : null}
       </section>
 
       <section className="mt-7">
         <div className="mb-4 flex items-baseline justify-between gap-4">
           <div>
             <h2 className="text-lg font-bold tracking-tight text-ink">{status ? receiptStatusLabels[status] : "Todos los recibos"}</h2>
-            <p className="mt-1 text-sm text-ink-secondary">{receipts.length} {receipts.length === 1 ? "recibo" : "recibos"} en esta vista</p>
+            <p className="mt-1 text-sm text-ink-secondary">{pagination?.total ?? receipts.length} {(pagination?.total ?? receipts.length) === 1 ? "recibo" : "recibos"} en esta vista</p>
           </div>
           {status ? <Link className="text-sm font-semibold text-brand hover:text-brand-hover" href={collectionUrl()}>Ver todos</Link> : null}
         </div>
@@ -180,6 +198,16 @@ export default async function CollectionPage({
             />
           </>
         )}
+        {pagination && pagination.paginas > 1 ? <>
+          <p className="mt-5 text-center text-sm text-ink-secondary">Mostrando <span className="font-semibold text-ink">{firstReceipt}–{lastReceipt}</span> de <span className="font-semibold text-ink">{pagination.total}</span> recibos</p>
+          <nav aria-label="Paginación de cobranza" className="mt-3 flex flex-wrap items-center justify-center gap-2">
+            <Link aria-disabled={pagination.pagina === 1} className={`rounded border border-border px-3 py-2 text-sm font-semibold ${pagination.pagina === 1 ? "pointer-events-none text-ink-secondary/50" : "text-ink hover:bg-bg"}`} href={collectionUrl(status, pagination.pagina - 1)} tabIndex={pagination.pagina === 1 ? -1 : undefined}>Anterior</Link>
+            {visiblePages.map((pageNumber) => pageNumber === pagination.pagina
+              ? <span aria-current="page" className="rounded bg-brand px-3 py-2 text-sm font-semibold text-white" key={pageNumber}>{pageNumber}</span>
+              : <Link className="rounded border border-border px-3 py-2 text-sm font-semibold text-ink hover:bg-bg" href={collectionUrl(status, pageNumber)} key={pageNumber}>{pageNumber}</Link>)}
+            <Link aria-disabled={pagination.pagina === pagination.paginas} className={`rounded border border-border px-3 py-2 text-sm font-semibold ${pagination.pagina === pagination.paginas ? "pointer-events-none text-ink-secondary/50" : "text-ink hover:bg-bg"}`} href={collectionUrl(status, pagination.pagina + 1)} tabIndex={pagination.pagina === pagination.paginas ? -1 : undefined}>Siguiente</Link>
+          </nav>
+        </> : null}
       </section>
     </>
   );

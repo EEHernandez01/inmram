@@ -127,20 +127,44 @@ export async function sincronizarCobranzaSistema(now = new Date()) {
 export async function listarCobranzaMensual({
   period,
   status,
+  search,
+  pagination,
   now = new Date(),
 }: {
   period: Date;
   status?: EstadoRecibo;
+  search?: string;
+  pagination?: { pagina: number; limite: number };
   now?: Date;
 }) {
   await requireSystemRole(READ_ROLES);
   const ownerId = await getOwnerScope();
+  const contractFilter = {
+    ...(ownerId ? { unidad: { propietarioId: ownerId } } : {}),
+    ...(search ? { OR: [
+      { arrendatario: { contains: search, mode: "insensitive" as const } },
+      { unidad: { identificador: { contains: search, mode: "insensitive" as const } } },
+      { unidad: { propiedad: { direccion: { contains: search, mode: "insensitive" as const } } } },
+    ] } : {}),
+  };
+  const where = { periodo: period, estatus: status, contrato: contractFilter };
+  const whereForSummary = { periodo: period, contrato: ownerId ? { unidad: { propietarioId: ownerId } } : undefined };
+  const whereForCounts = { periodo: period, contrato: contractFilter };
+  const [total, groupedCounts] = pagination ? await Promise.all([
+    prisma.recibo.count({ where }),
+    prisma.recibo.groupBy({ by: ["estatus"], where: whereForCounts, _count: { _all: true } }),
+  ]) : [undefined, undefined];
+  const paginas = pagination ? Math.max(1, Math.ceil((total ?? 0) / pagination.limite)) : 1;
+  const pagina = pagination ? Math.min(Math.max(1, pagination.pagina), paginas) : 1;
   const receipts = await prisma.recibo.findMany({
-    where: { periodo: period, estatus: status, contrato: ownerId ? { unidad: { propietarioId: ownerId } } : undefined },
+    where,
     orderBy: [
       { contrato: { unidad: { propiedad: { direccion: "asc" } } } },
       { contrato: { unidad: { identificador: "asc" } } },
+      { id: "asc" },
     ],
+    skip: pagination ? (pagina - 1) * pagination.limite : undefined,
+    take: pagination?.limite,
     include: {
       contrato: {
         include: {
@@ -157,10 +181,10 @@ export async function listarCobranzaMensual({
     },
   });
 
-  const allReceipts = status
+  const allReceipts = status || pagination
     ? await prisma.recibo.findMany({
-      where: { periodo: period, contrato: ownerId ? { unidad: { propietarioId: ownerId } } : undefined },
-      include: { pagos: true },
+      where: whereForSummary,
+      select: { estatus: true, monto: true, cargoFijo: true, pagos: { select: { monto: true, anuladoEn: true } } },
     })
     : receipts;
   const expected = allReceipts.reduce((sum, receipt) => sum + receiptTotal(receipt), 0);
@@ -193,6 +217,13 @@ export async function listarCobranzaMensual({
       tasaMorosidad:
         allReceipts.length > 0 ? (overdue / allReceipts.length) * 100 : 0,
     },
+    counts: pagination ? {
+      todos: groupedCounts?.reduce((sum, group) => sum + group._count._all, 0) ?? 0,
+      pendientes: groupedCounts?.find((group) => group.estatus === EstadoRecibo.PENDIENTE)?._count._all ?? 0,
+      vencidos: groupedCounts?.find((group) => group.estatus === EstadoRecibo.VENCIDO)?._count._all ?? 0,
+      pagados: groupedCounts?.find((group) => group.estatus === EstadoRecibo.PAGADO)?._count._all ?? 0,
+    } : undefined,
+    pagination: pagination ? { pagina, paginas, total: total ?? 0 } : undefined,
   };
 }
 
