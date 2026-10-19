@@ -57,10 +57,11 @@ type ContractDraft = {
   fechaInicio: string;
   plazoMeses: string;
   fechaFin: string;
+  fechaProximoCobro: string;
+  periodicidadCobro: "MENSUAL" | "BIMESTRAL" | "SEMESTRAL" | "ANUAL";
   rentaMensualBase: string;
   diaPago: string;
   depositoGarantia: string;
-  cargoFijoMensual: string;
 };
 type UnitDraft = {
   id: string;
@@ -97,10 +98,11 @@ const emptyContract = (): ContractDraft => ({
   fechaInicio: "",
   plazoMeses: "",
   fechaFin: "",
+  fechaProximoCobro: "",
+  periodicidadCobro: "MENSUAL",
   rentaMensualBase: "",
   diaPago: "",
   depositoGarantia: "",
-  cargoFijoMensual: defaultMoneyValue,
 });
 
 const emptyUnit = (): UnitDraft => ({
@@ -130,6 +132,21 @@ function calculatedEndDate(start: string, term: string, paymentDay: string) {
   const paymentDate = new Date(Date.UTC(endMonth.getUTCFullYear(), endMonth.getUTCMonth(), Math.min(dueDay, lastDay)));
   paymentDate.setUTCDate(paymentDate.getUTCDate() - 1);
   return paymentDate.toISOString().slice(0, 10);
+}
+
+function suggestedNextCollection(start: string, paymentDay: string) {
+  const day = Number(paymentDay);
+  if (!Number.isInteger(day) || day < 1 || day > 31) return "";
+  const todayParts = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const today = Object.fromEntries(todayParts.map((part) => [part.type, part.value]));
+  const todayValue = new Date(Date.UTC(Number(today.year), Number(today.month) - 1, Number(today.day)));
+  const [year, month, date] = start.split("-").map(Number);
+  const startValue = start ? new Date(Date.UTC(year, month - 1, date)) : todayValue;
+  const base = startValue > todayValue ? startValue : todayValue;
+  let dueYear = base.getFullYear(); let dueMonth = base.getMonth();
+  if (day < base.getDate()) { dueMonth += 1; if (dueMonth > 11) { dueMonth = 0; dueYear += 1; } }
+  const due = new Date(Date.UTC(dueYear, dueMonth, Math.min(day, new Date(Date.UTC(dueYear, dueMonth + 1, 0)).getUTCDate())));
+  return due.toISOString().slice(0, 10);
 }
 
 async function uploadPropertyPhoto(file: File): Promise<UploadedPhoto> {
@@ -308,7 +325,7 @@ export function PropertyOnboardingWizard({ owners, placesEnabled }: { owners: Ow
         if (unit.amenidades.includes("Estacionamiento") && !unit.atributos.cajonesEstacionamiento?.trim()) return `Captura los cajones de estacionamiento para la unidad ${unit.identificador}.`;
         if (!unit.contrato) continue;
         const contract = unit.contrato;
-        if (!contract.arrendatario.trim() || !contract.aval.trim() || !contract.fechaInicio || !contract.plazoMeses || !contract.fechaFin || !contract.rentaMensualBase.trim() || !contract.diaPago || !contract.depositoGarantia.trim()) return `Completa los datos obligatorios del contrato de la unidad ${unit.identificador}.`;
+        if (!contract.arrendatario.trim() || !contract.aval.trim() || !contract.fechaInicio || !contract.plazoMeses || !contract.fechaFin || !contract.fechaProximoCobro || !contract.rentaMensualBase.trim() || !contract.diaPago || !contract.depositoGarantia.trim()) return `Completa los datos obligatorios del contrato de la unidad ${unit.identificador}.`;
         if (contract.tipoGarantia === "PRENDA" && !contract.valorGarantia.trim()) return `Captura la valuación de la prenda para la unidad ${unit.identificador}.`;
         if (contract.tipoGarantia === "PAGARE" && (!contract.pagareMonto.trim() || !contract.pagareFechaEmision || !contract.pagareFechaVencimiento || !contract.pagareLugarPago.trim())) return `Completa los datos del pagaré para la unidad ${unit.identificador}.`;
       }
@@ -467,13 +484,14 @@ function ContractFields({ contract, onChange, unitLabel }: { contract: ContractD
       if (field !== "fechaFin") {
         const calculated = calculatedEndDate(next.fechaInicio, next.plazoMeses, next.diaPago);
         if (calculated) next.fechaFin = calculated;
+        if (field === "fechaInicio" || field === "diaPago") next.fechaProximoCobro = suggestedNextCollection(next.fechaInicio, next.diaPago);
       }
       return next;
     });
   }
 
   const isPagare = contract.tipoGarantia === "PAGARE";
-  return <section className="mt-6 space-y-5 rounded-xl border border-brand/20 bg-surface p-4"><div><p className="text-xs font-bold uppercase tracking-wide text-brand">Contrato activo</p><h4 className="mt-1 font-serif text-lg font-semibold text-ink">{unitLabel}</h4></div><div className="grid gap-4 sm:grid-cols-2"><Field label="Nombre del arrendatario"><Input autoComplete="name" maxLength={250} onChange={(event) => update("arrendatario", event.target.value)} required value={contract.arrendatario} /></Field><Field label="Correo electrónico"><Input autoComplete="email" maxLength={254} onChange={(event) => update("emailArrendatario", event.target.value)} placeholder="Opcional" type="email" value={contract.emailArrendatario} /></Field><Field label="Teléfono"><Input autoComplete="tel" maxLength={20} onChange={(event) => update("telefonoArrendatario", event.target.value)} placeholder="Opcional" type="tel" value={contract.telefonoArrendatario} /></Field></div><div className="border-t border-border pt-5"><h5 className="font-semibold text-ink">Garantía</h5><div className="mt-4 grid gap-4 sm:grid-cols-2"><Field label="Tipo de garantía"><Select onChange={(event) => update("tipoGarantia", event.target.value)} value={contract.tipoGarantia}><option value="AVAL">Aval (persona)</option><option value="PRENDA">Prenda en garantía</option><option value="INMUEBLE">Inmueble en garantía</option><option value="PAGARE">Pagaré</option></Select></Field><Field label={isPagare ? "Suscriptor del pagaré" : contract.tipoGarantia === "AVAL" ? "Nombre completo del aval" : contract.tipoGarantia === "PRENDA" ? "Descripción de la prenda" : "Descripción del inmueble"}><Input maxLength={250} onChange={(event) => update("aval", event.target.value)} required value={contract.aval} /></Field>{contract.tipoGarantia === "PRENDA" ? <Field label="Valuación de la prenda"><MoneyInput defaultValue={contract.valorGarantia} onChange={(event) => update("valorGarantia", event.currentTarget.value)} required /></Field> : null}{isPagare ? <><Field label="Importe del pagaré"><MoneyInput defaultValue={contract.pagareMonto} onChange={(event) => update("pagareMonto", event.currentTarget.value)} required /></Field><Field label="Fecha de emisión"><Input onChange={(event) => update("pagareFechaEmision", event.target.value)} required type="date" value={contract.pagareFechaEmision} /></Field><Field label="Fecha de vencimiento"><Input onChange={(event) => update("pagareFechaVencimiento", event.target.value)} required type="date" value={contract.pagareFechaVencimiento} /></Field><Field label="Lugar de pago"><Input maxLength={250} onChange={(event) => update("pagareLugarPago", event.target.value)} required value={contract.pagareLugarPago} /></Field></> : null}{contract.tipoGarantia === "AVAL" ? <><Field label="Teléfono del aval"><Input autoComplete="tel" maxLength={20} onChange={(event) => update("avalTelefono", event.target.value)} placeholder="Opcional" type="tel" value={contract.avalTelefono} /></Field><Field label="Correo del aval"><Input autoComplete="email" maxLength={254} onChange={(event) => update("avalCorreo", event.target.value)} placeholder="Opcional" type="email" value={contract.avalCorreo} /></Field></> : null}</div></div><div className="border-t border-border pt-5"><h5 className="font-semibold text-ink">Vigencia y cobro</h5><div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><Field label="Fecha de inicio"><Input onChange={(event) => updateTerm("fechaInicio", event.target.value)} required type="date" value={contract.fechaInicio} /></Field><Field label="Plazo (meses)"><Input max={1200} min={1} onChange={(event) => updateTerm("plazoMeses", event.target.value)} required type="number" value={contract.plazoMeses} /></Field><Field label="Día de pago"><Input max={31} min={1} onChange={(event) => updateTerm("diaPago", event.target.value)} required type="number" value={contract.diaPago} /></Field><Field label="Fecha de finalización"><Input onChange={(event) => updateTerm("fechaFin", event.target.value)} required type="date" value={contract.fechaFin} /></Field><Field label="Renta mensual base"><MoneyInput defaultValue={contract.rentaMensualBase} onChange={(event) => update("rentaMensualBase", event.currentTarget.value)} required /></Field><Field label="Depósito en garantía"><MoneyInput defaultValue={contract.depositoGarantia} onChange={(event) => update("depositoGarantia", event.currentTarget.value)} required /></Field><Field hint="Incluye agua y otros servicios pactados." label="Servicios mensuales"><MoneyInput defaultValue={contract.cargoFijoMensual} onChange={(event) => update("cargoFijoMensual", event.currentTarget.value)} required /></Field></div></div></section>;
+  return <section className="mt-6 space-y-5 rounded-xl border border-brand/20 bg-surface p-4"><div><p className="text-xs font-bold uppercase tracking-wide text-brand">Contrato activo</p><h4 className="mt-1 font-serif text-lg font-semibold text-ink">{unitLabel}</h4></div><div className="grid gap-4 sm:grid-cols-2"><Field label="Nombre del arrendatario"><Input autoComplete="name" maxLength={250} onChange={(event) => update("arrendatario", event.target.value)} required value={contract.arrendatario} /></Field><Field label="Correo electrónico"><Input autoComplete="email" maxLength={254} onChange={(event) => update("emailArrendatario", event.target.value)} placeholder="Opcional" type="email" value={contract.emailArrendatario} /></Field><Field label="Teléfono"><Input autoComplete="tel" maxLength={20} onChange={(event) => update("telefonoArrendatario", event.target.value)} placeholder="Opcional" type="tel" value={contract.telefonoArrendatario} /></Field></div><div className="border-t border-border pt-5"><h5 className="font-semibold text-ink">Garantía</h5><div className="mt-4 grid gap-4 sm:grid-cols-2"><Field label="Tipo de garantía"><Select onChange={(event) => update("tipoGarantia", event.target.value)} value={contract.tipoGarantia}><option value="AVAL">Aval (persona)</option><option value="PRENDA">Prenda en garantía</option><option value="INMUEBLE">Inmueble en garantía</option><option value="PAGARE">Pagaré</option></Select></Field><Field label={isPagare ? "Suscriptor del pagaré" : contract.tipoGarantia === "AVAL" ? "Nombre completo del aval" : contract.tipoGarantia === "PRENDA" ? "Descripción de la prenda" : "Descripción del inmueble"}><Input maxLength={250} onChange={(event) => update("aval", event.target.value)} required value={contract.aval} /></Field>{contract.tipoGarantia === "PRENDA" ? <Field label="Valuación de la prenda"><MoneyInput defaultValue={contract.valorGarantia} onChange={(event) => update("valorGarantia", event.currentTarget.value)} required /></Field> : null}{isPagare ? <><Field label="Importe del pagaré"><MoneyInput defaultValue={contract.pagareMonto} onChange={(event) => update("pagareMonto", event.currentTarget.value)} required /></Field><Field label="Fecha de emisión"><Input onChange={(event) => update("pagareFechaEmision", event.target.value)} required type="date" value={contract.pagareFechaEmision} /></Field><Field label="Fecha de vencimiento"><Input onChange={(event) => update("pagareFechaVencimiento", event.target.value)} required type="date" value={contract.pagareFechaVencimiento} /></Field><Field label="Lugar de pago"><Input maxLength={250} onChange={(event) => update("pagareLugarPago", event.target.value)} required value={contract.pagareLugarPago} /></Field></> : null}{contract.tipoGarantia === "AVAL" ? <><Field label="Teléfono del aval"><Input autoComplete="tel" maxLength={20} onChange={(event) => update("avalTelefono", event.target.value)} placeholder="Opcional" type="tel" value={contract.avalTelefono} /></Field><Field label="Correo del aval"><Input autoComplete="email" maxLength={254} onChange={(event) => update("avalCorreo", event.target.value)} placeholder="Opcional" type="email" value={contract.avalCorreo} /></Field></> : null}</div></div><div className="border-t border-border pt-5"><h5 className="font-semibold text-ink">Vigencia y cobro</h5><div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><Field label="Fecha de inicio"><Input onChange={(event) => updateTerm("fechaInicio", event.target.value)} required type="date" value={contract.fechaInicio} /></Field><Field label="Plazo (meses)"><Input max={1200} min={1} onChange={(event) => updateTerm("plazoMeses", event.target.value)} required type="number" value={contract.plazoMeses} /></Field><Field label="Periodicidad de cobro"><Select onChange={(event) => onChange((current) => ({ ...current, periodicidadCobro: event.target.value as ContractDraft["periodicidadCobro"] }))} value={contract.periodicidadCobro}><option value="MENSUAL">Mensual</option><option value="BIMESTRAL">Bimestral</option><option value="SEMESTRAL">Semestral</option><option value="ANUAL">Anual</option></Select></Field><Field label="Día de pago"><Input max={31} min={1} onChange={(event) => updateTerm("diaPago", event.target.value)} required type="number" value={contract.diaPago} /></Field><Field label="Fecha de finalización"><Input onChange={(event) => updateTerm("fechaFin", event.target.value)} required type="date" value={contract.fechaFin} /></Field><Field hint="Sugerida según el día de pago; los siguientes cobros usarán el día pactado." label="Próximo cobro"><Input min={contract.fechaInicio || undefined} onChange={(event) => update("fechaProximoCobro", event.target.value)} required type="date" value={contract.fechaProximoCobro} /></Field><Field hint="Se multiplicará por los meses cubiertos en cada recibo." label="Renta mensual base"><MoneyInput defaultValue={contract.rentaMensualBase} onChange={(event) => update("rentaMensualBase", event.currentTarget.value)} required /></Field><Field label="Depósito en garantía"><MoneyInput defaultValue={contract.depositoGarantia} onChange={(event) => update("depositoGarantia", event.currentTarget.value)} required /></Field></div></div></section>;
 }
 
 function ReviewCard({ action, children, title }: { action: () => void; children: React.ReactNode; title: string }) {

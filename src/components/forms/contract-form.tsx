@@ -23,10 +23,11 @@ type ContractDefaults = {
   fechaInicio: string;
   plazoMeses: number;
   fechaFin: string;
+  fechaProximoCobro?: string | null;
+  periodicidadCobro?: "MENSUAL" | "BIMESTRAL" | "SEMESTRAL" | "ANUAL";
   rentaMensualBase: string;
   diaPago: number;
   depositoGarantia: string;
-  cargoFijoMensual?: string;
   estado: "ACTIVO" | "VENCIDO" | "CANCELADO";
 };
 
@@ -70,7 +71,7 @@ export function ContractForm({ cancelHref, defaults, propertyId, submitLabel, un
         </div>
       </section>
 
-      <section className="rounded-2xl bg-bg p-5 shadow-[inset_3px_3px_7px_#c7cdd5,inset_-3px_-3px_7px_#fff]"><div><p className="text-[10px] font-bold uppercase tracking-[.13em] text-brand/70">Vigencia y cobro</p><h2 className="mt-1 font-serif text-xl font-semibold text-ink">Condiciones del contrato</h2></div><div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3"><ContractTermFields defaultEnd={defaults?.fechaFin} defaultPaymentDay={defaults?.diaPago} defaultStart={defaults?.fechaInicio} defaultTerm={defaults?.plazoMeses} /><Field label="Renta mensual base"><MoneyInput defaultValue={defaults?.rentaMensualBase} name="rentaMensualBase" required /></Field><Field label="Depósito en garantía"><MoneyInput defaultValue={defaults?.depositoGarantia} name="depositoGarantia" required /></Field><Field label="Servicios mensuales" hint="Incluye agua y otros servicios pactados."><MoneyInput defaultValue={defaults?.cargoFijoMensual ?? "0.00"} name="cargoFijoMensual" required /></Field></div></section>
+      <section className="rounded-2xl bg-bg p-5 shadow-[inset_3px_3px_7px_#c7cdd5,inset_-3px_-3px_7px_#fff]"><div><p className="text-[10px] font-bold uppercase tracking-[.13em] text-brand/70">Vigencia y cobro</p><h2 className="mt-1 font-serif text-xl font-semibold text-ink">Condiciones del contrato</h2></div><div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3"><ContractTermFields defaultEnd={defaults?.fechaFin} defaultNextCollection={defaults?.fechaProximoCobro ?? ""} defaultPaymentDay={defaults?.diaPago} defaultStart={defaults?.fechaInicio} defaultTerm={defaults?.plazoMeses} /><Field label="Periodicidad de cobro"><Select defaultValue={defaults?.periodicidadCobro ?? "MENSUAL"} name="periodicidadCobro"><option value="MENSUAL">Mensual</option><option value="BIMESTRAL">Bimestral</option><option value="SEMESTRAL">Semestral</option><option value="ANUAL">Anual</option></Select></Field><Field hint="Se multiplicará por los meses cubiertos en cada recibo." label="Renta mensual base"><MoneyInput defaultValue={defaults?.rentaMensualBase} name="rentaMensualBase" required /></Field><Field label="Depósito en garantía"><MoneyInput defaultValue={defaults?.depositoGarantia} name="depositoGarantia" required /></Field></div></section>
 
       <FormStatus message={undefined} />
       <div className="flex flex-col-reverse gap-3 border-t border-brand/10 pt-6 sm:flex-row sm:items-center sm:justify-end"><a className="inline-flex justify-center rounded-xl px-5 py-2.5 text-sm font-semibold text-ink-secondary transition hover:bg-white/45 hover:text-ink" href={cancelHref}>Cancelar</a><button className="rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-[4px_4px_9px_#b8c2cd] hover:bg-brand-hover" type="submit">{submitLabel}</button></div>

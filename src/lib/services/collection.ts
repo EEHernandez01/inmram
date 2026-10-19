@@ -5,7 +5,11 @@ import { getOwnerScope, READ_ROLES, requireSystemRole, WRITE_ROLES } from "@/lib
 import {
   calculateOverdueDays,
   calculateReceiptPaymentBalance,
-  calculateReceiptDueDate,
+  calculateReceiptCoverage,
+  calculatePeriodicCharge,
+  calculateContractReceiptDueDate,
+  collectionIntervalMonths,
+  collectionPeriodIsEligible,
   calculateReceiptStatus,
   calculateReceiptTotal,
   currentCollectionDate,
@@ -19,13 +23,13 @@ import { recordIdSchema, toDatabaseDate } from "@/lib/validation/foundation";
 import {
   paymentInputSchema,
   paymentReversalInputSchema,
+  receiptReviewResolutionSchema,
   type PaymentInput,
   type PaymentReversalInput,
 } from "@/lib/validation/collection";
 
 type ReceiptWithPayments = {
   monto: { toString(): string };
-  cargoFijo: { toString(): string };
   pagos: { monto: { toString(): string }; anuladoEn: Date | null }[];
 };
 
@@ -33,11 +37,8 @@ function cents(value: { toString(): string } | number | string) {
   return Math.round(Number(value) * 100);
 }
 
-function receiptTotal(receipt: Pick<ReceiptWithPayments, "monto" | "cargoFijo">) {
-  return calculateReceiptTotal({
-    rent: Number(receipt.monto),
-    servicesCharge: Number(receipt.cargoFijo),
-  });
+function receiptTotal(receipt: Pick<ReceiptWithPayments, "monto">) {
+  return calculateReceiptTotal({ rent: Number(receipt.monto) });
 }
 
 function receiptPaymentSummary(receipt: ReceiptWithPayments) {
@@ -52,7 +53,8 @@ function receiptPaymentSummary(receipt: ReceiptWithPayments) {
 
   return {
     total,
-    ...balance,
+    montoPagado: Math.min(balance.montoPagado, total),
+    saldoPendiente: balance.saldoPendiente,
   };
 }
 
@@ -68,25 +70,32 @@ export async function sincronizarCobranzaSistema(now = new Date()) {
     where: {
       estado: EstadoContrato.ACTIVO,
       fechaInicio: { lte: receiptPeriodEnd(period) },
-      fechaFin: { gte: period },
+      AND: [
+        { OR: [{ fechaProximoCobro: null }, { fechaProximoCobro: { lte: receiptPeriodEnd(period) } }] },
+        { fechaFin: { gte: period } },
+      ],
       unidad: { propiedad: { archivadaEn: null } },
     },
     select: {
       id: true,
       rentaMensualBase: true,
-      cargoFijoMensual: true,
       diaPago: true,
+      fechaProximoCobro: true,
+      fechaFin: true,
+      periodicidadCobro: true,
     },
   });
 
-  const receiptData = contracts.map((contract) => {
-      const dueDate = calculateReceiptDueDate(period, contract.diaPago);
+  const receiptData = contracts.filter((contract) => collectionPeriodIsEligible(period, contract.fechaProximoCobro, collectionIntervalMonths(contract.periodicidadCobro))).map((contract) => {
+      const dueDate = calculateContractReceiptDueDate(period, contract.diaPago, contract.fechaProximoCobro);
+      const intervalMonths = collectionIntervalMonths(contract.periodicidadCobro);
+      const coverage = calculateReceiptCoverage(period, intervalMonths, contract.fechaFin);
       return {
         contratoId: contract.id,
         periodo: period,
+        periodoFin: coverage.periodEnd,
         fechaVencimiento: dueDate,
-        monto: contract.rentaMensualBase,
-        cargoFijo: contract.cargoFijoMensual,
+        monto: calculatePeriodicCharge(contract.rentaMensualBase.toString(), coverage.months),
         estatus: calculateReceiptStatus({
           currentDate,
           dueDate,
@@ -147,9 +156,15 @@ export async function listarCobranzaMensual({
       { unidad: { propiedad: { direccion: { contains: search, mode: "insensitive" as const } } } },
     ] } : {}),
   };
-  const where = { periodo: period, estatus: status, contrato: contractFilter };
-  const whereForSummary = { periodo: period, contrato: ownerId ? { unidad: { propietarioId: ownerId } } : undefined };
-  const whereForCounts = { periodo: period, contrato: contractFilter };
+  const monthEnd = receiptPeriodEnd(period);
+  const receiptCoversMonth = { periodo: { lte: period }, periodoFin: { gte: period } };
+  const receiptDueThisMonth = { fechaVencimiento: { gte: period, lte: monthEnd } };
+  const where = { OR: [receiptCoversMonth, receiptDueThisMonth], estatus: status, contrato: contractFilter };
+  const whereForSummary = {
+    fechaVencimiento: { gte: period, lte: monthEnd },
+    contrato: ownerId ? { unidad: { propietarioId: ownerId } } : undefined,
+  };
+  const whereForCounts = { OR: [receiptCoversMonth, receiptDueThisMonth], contrato: contractFilter };
   const [total, groupedCounts] = pagination ? await Promise.all([
     prisma.recibo.count({ where }),
     prisma.recibo.groupBy({ by: ["estatus"], where: whereForCounts, _count: { _all: true } }),
@@ -181,18 +196,17 @@ export async function listarCobranzaMensual({
     },
   });
 
-  const allReceipts = status || pagination
-    ? await prisma.recibo.findMany({
-      where: whereForSummary,
-      select: { estatus: true, monto: true, cargoFijo: true, pagos: { select: { monto: true, anuladoEn: true } } },
-    })
-    : receipts;
-  const expected = allReceipts.reduce((sum, receipt) => sum + receiptTotal(receipt), 0);
-  const collected = allReceipts.reduce(
+  const receiptsDueInMonth = await prisma.recibo.findMany({
+    where: whereForSummary,
+    select: { estatus: true, monto: true, pagos: { select: { monto: true, anuladoEn: true } } },
+  });
+  const confirmedReceipts = receiptsDueInMonth.filter((receipt) => receipt.estatus !== EstadoRecibo.REVISION && receipt.estatus !== EstadoRecibo.OMITIDO);
+  const expected = confirmedReceipts.reduce((sum, receipt) => sum + receiptTotal(receipt), 0);
+  const collected = confirmedReceipts.reduce(
     (sum, receipt) => sum + receiptPaymentSummary(receipt).montoPagado,
     0,
   );
-  const overdue = allReceipts.filter(
+  const overdue = confirmedReceipts.filter(
     (receipt) => receipt.estatus === EstadoRecibo.VENCIDO,
   ).length;
   const currentDate = currentCollectionDate(now);
@@ -214,14 +228,17 @@ export async function listarCobranzaMensual({
       cobrado: collected,
       porcentajeCobrado: expected > 0 ? (collected / expected) * 100 : 0,
       recibosVencidos: overdue,
+      recibosRevision: receiptsDueInMonth.filter((receipt) => receipt.estatus === EstadoRecibo.REVISION).length,
       tasaMorosidad:
-        allReceipts.length > 0 ? (overdue / allReceipts.length) * 100 : 0,
+        confirmedReceipts.length > 0 ? (overdue / confirmedReceipts.length) * 100 : 0,
     },
     counts: pagination ? {
       todos: groupedCounts?.reduce((sum, group) => sum + group._count._all, 0) ?? 0,
       pendientes: groupedCounts?.find((group) => group.estatus === EstadoRecibo.PENDIENTE)?._count._all ?? 0,
       vencidos: groupedCounts?.find((group) => group.estatus === EstadoRecibo.VENCIDO)?._count._all ?? 0,
       pagados: groupedCounts?.find((group) => group.estatus === EstadoRecibo.PAGADO)?._count._all ?? 0,
+      revision: groupedCounts?.find((group) => group.estatus === EstadoRecibo.REVISION)?._count._all ?? 0,
+      omitidos: groupedCounts?.find((group) => group.estatus === EstadoRecibo.OMITIDO)?._count._all ?? 0,
     } : undefined,
     pagination: pagination ? { pagina, paginas, total: total ?? 0 } : undefined,
   };
@@ -305,6 +322,25 @@ export async function registrarPagoRecibo(
       },
     });
     return payment;
+  });
+}
+
+export async function resolverRevisionRecibo(receiptId: string, input: unknown, now = new Date()) {
+  const { user } = await requireSystemRole(WRITE_ROLES);
+  const id = recordIdSchema.parse(receiptId);
+  const data = receiptReviewResolutionSchema.parse(input);
+  return prisma.$transaction(async (tx) => {
+    const receipt = await tx.recibo.findUnique({
+      where: { id },
+      include: { contrato: { include: { unidad: { include: { propiedad: { select: { archivadaEn: true } } } } } } },
+    });
+    if (!receipt) throw new DomainError("NOT_FOUND", "El recibo no existe.");
+    if (receipt.contrato.unidad.propiedad.archivadaEn) throw new DomainError("PROPERTY_ARCHIVED", "La propiedad está archivada y es de solo consulta.");
+    if (receipt.estatus !== EstadoRecibo.REVISION) throw new DomainError("RECEIPT_NOT_IN_REVIEW", "El recibo ya no está pendiente de revisión.");
+    const status = data.accion === "OMITIR" ? EstadoRecibo.OMITIDO : calculateReceiptStatus({ currentDate: currentCollectionDate(now), dueDate: receipt.fechaVencimiento, paid: false });
+    const updated = await tx.recibo.update({ where: { id }, data: { estatus: status } });
+    await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: data.accion === "OMITIR" ? "OMITIR_RECIBO_REVISION" : "CONFIRMAR_SALDO_REVISION", entidad: "Recibo", entidadId: id, antes: { estatus: receipt.estatus, fechaVencimiento: receipt.fechaVencimiento.toISOString() }, despues: { estatus: updated.estatus, motivo: data.accion === "OMITIR" ? data.motivo : null } });
+    return updated;
   });
 }
 

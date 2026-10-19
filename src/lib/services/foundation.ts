@@ -1,7 +1,7 @@
 import "server-only";
 
 import { Prisma } from "@/generated/prisma/client";
-import { EstadoContrato } from "@/generated/prisma/enums";
+import { EstadoContrato, EstadoRecibo } from "@/generated/prisma/enums";
 import {
   ADMIN_ROLES,
   READ_ROLES,
@@ -29,7 +29,11 @@ import {
   type ReferenciaPropietarioUnidadEnAsistente,
 } from "@/lib/validation/property-onboarding";
 import {
-  calculateReceiptDueDate,
+  calculatePeriodicCharge,
+  calculateContractReceiptDueDate,
+  calculateReceiptCoverage,
+  collectionIntervalMonths,
+  collectionPeriodIsEligible,
   calculateReceiptStatus,
   contractOverlapsPeriod,
   currentCollectionDate,
@@ -955,6 +959,7 @@ async function crearContratoEnTransaccion(
 ) {
   const startDate = toDatabaseDate(data.fechaInicio);
   const endDate = toDatabaseDate(data.fechaFin);
+  const nextCollectionDate = toDatabaseDate(data.fechaProximoCobro);
   const period = currentReceiptPeriod();
   const guarantee = normalizarGarantia(data);
 
@@ -963,22 +968,28 @@ async function crearContratoEnTransaccion(
       ...guarantee,
       fechaInicio: startDate,
       fechaFin: endDate,
+      fechaProximoCobro: nextCollectionDate,
+      periodicidadCobro: data.periodicidadCobro,
     },
   });
-  await registrarAuditoria(transaction, { usuarioSistemaId, accion: "CREAR", entidad: "Contrato", entidadId: contract.id, despues: { estado: contract.estado, fechaInicio: contract.fechaInicio.toISOString(), fechaFin: contract.fechaFin.toISOString(), rentaMensualBase: contract.rentaMensualBase.toString(), diaPago: contract.diaPago } });
+  await registrarAuditoria(transaction, { usuarioSistemaId, accion: "CREAR", entidad: "Contrato", entidadId: contract.id, despues: { estado: contract.estado, fechaInicio: contract.fechaInicio.toISOString(), fechaFin: contract.fechaFin.toISOString(), fechaProximoCobro: nextCollectionDate.toISOString(), periodicidadCobro: contract.periodicidadCobro, rentaMensualBase: contract.rentaMensualBase.toString(), diaPago: contract.diaPago } });
 
   if (
     data.estado === EstadoContrato.ACTIVO &&
-    contractOverlapsPeriod({ startDate, endDate, period })
+    contractOverlapsPeriod({ startDate, endDate, period }) &&
+    collectionPeriodIsEligible(period, nextCollectionDate, collectionIntervalMonths(data.periodicidadCobro)) &&
+    nextCollectionDate.getTime() <= new Date(Date.UTC(period.getUTCFullYear(), period.getUTCMonth() + 1, 0)).getTime() &&
+    nextCollectionDate.getTime() >= period.getTime()
   ) {
-    const dueDate = calculateReceiptDueDate(period, data.diaPago);
+    const dueDate = new Date(nextCollectionDate);
+    const coverage = calculateReceiptCoverage(period, collectionIntervalMonths(data.periodicidadCobro), endDate);
     await transaction.recibo.create({
       data: {
         contratoId: contract.id,
         periodo: period,
+        periodoFin: coverage.periodEnd,
         fechaVencimiento: dueDate,
-        monto: data.rentaMensualBase,
-        cargoFijo: data.cargoFijoMensual,
+        monto: calculatePeriodicCharge(data.rentaMensualBase, coverage.months),
         estatus: calculateReceiptStatus({
           currentDate: currentCollectionDate(),
           dueDate,
@@ -994,6 +1005,7 @@ async function crearContratoEnTransaccion(
 export async function crearContrato(input: ContratoInput) {
   const { user } = await requireSystemRole(WRITE_ROLES);
   const data = contratoInputSchema.parse(input);
+  if (toDatabaseDate(data.fechaProximoCobro) < currentCollectionDate()) throw new DomainError("INVALID_NEXT_COLLECTION_DATE", "El próximo cobro debe ser hoy o una fecha futura.");
   if (data.estado === EstadoContrato.CANCELADO) {
     throw new DomainError("INVALID_CONTRACT_STATE", "Un contrato nuevo no puede crearse como cancelado.");
   }
@@ -1015,6 +1027,8 @@ export async function actualizarContrato(
   const data = contratoInputSchema.parse(input);
   const before = await prisma.contrato.findUnique({ where: { id } });
   if (!before) throw new DomainError("NOT_FOUND", "El contrato no existe.");
+  const selectedCollectionDate = toDatabaseDate(data.fechaProximoCobro);
+  if (selectedCollectionDate < currentCollectionDate() && before.fechaProximoCobro?.getTime() !== selectedCollectionDate.getTime()) throw new DomainError("INVALID_NEXT_COLLECTION_DATE", "El próximo cobro debe ser hoy o una fecha futura.");
   if (before.estado === EstadoContrato.CANCELADO) throw new DomainError("CONTRACT_CANCELLED", "Un contrato cancelado no se puede editar.");
   if (data.estado === EstadoContrato.CANCELADO) throw new DomainError("INVALID_CONTRACT_STATE", "Usa la acción de cancelación para registrar la fecha y el motivo.");
   await asegurarUnidadEnPropiedadActiva(data.unidadId);
@@ -1025,8 +1039,26 @@ export async function actualizarContrato(
 
   const guarantee = normalizarGarantia(data);
   return prisma.$transaction(async (tx) => {
-    const updated = await tx.contrato.update({ where: { id }, data: { ...guarantee, fechaInicio: toDatabaseDate(data.fechaInicio), fechaFin: toDatabaseDate(data.fechaFin) } });
-    await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "ACTUALIZAR", entidad: "Contrato", entidadId: id, antes: { estado: before.estado, fechaInicio: before.fechaInicio.toISOString(), fechaFin: before.fechaFin.toISOString(), rentaMensualBase: before.rentaMensualBase.toString(), diaPago: before.diaPago }, despues: { estado: updated.estado, fechaInicio: updated.fechaInicio.toISOString(), fechaFin: updated.fechaFin.toISOString(), rentaMensualBase: updated.rentaMensualBase.toString(), diaPago: updated.diaPago } });
+    const nextCollectionDate = toDatabaseDate(data.fechaProximoCobro);
+    const updated = await tx.contrato.update({ where: { id }, data: { ...guarantee, fechaInicio: toDatabaseDate(data.fechaInicio), fechaFin: toDatabaseDate(data.fechaFin), fechaProximoCobro: nextCollectionDate, periodicidadCobro: data.periodicidadCobro } });
+    const period = currentReceiptPeriod();
+    const firstPeriod = new Date(Date.UTC(nextCollectionDate.getUTCFullYear(), nextCollectionDate.getUTCMonth(), 1));
+    const receiptsToReview = { contratoId: id, estatus: { in: [EstadoRecibo.PENDIENTE, EstadoRecibo.VENCIDO] }, OR: [{ periodo: { lt: firstPeriod } }, { periodo: firstPeriod, fechaVencimiento: { lt: nextCollectionDate } }] };
+    const receiptsBeforeReview = await tx.recibo.findMany({ where: receiptsToReview, select: { id: true, estatus: true } });
+    const reviewed = await tx.recibo.updateMany({ where: receiptsToReview, data: { estatus: EstadoRecibo.REVISION } });
+    for (const receipt of receiptsBeforeReview) await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "ENVIAR_A_REVISION", entidad: "Recibo", entidadId: receipt.id, antes: { estatus: receipt.estatus }, despues: { estatus: EstadoRecibo.REVISION, contratoId: id } });
+    const receipt = collectionPeriodIsEligible(period, nextCollectionDate, collectionIntervalMonths(updated.periodicidadCobro)) ? await tx.recibo.findFirst({ where: { contratoId: id, periodo: period, estatus: { notIn: [EstadoRecibo.PAGADO, EstadoRecibo.OMITIDO, EstadoRecibo.REVISION] } }, include: { pagos: { where: { anuladoEn: null }, orderBy: { fechaPago: "desc" } } } }) : null;
+    if (receipt) {
+      const coverage = calculateReceiptCoverage(period, collectionIntervalMonths(updated.periodicidadCobro), updated.fechaFin);
+      const dueDate = calculateContractReceiptDueDate(period, updated.diaPago, nextCollectionDate);
+      const amount = calculatePeriodicCharge(updated.rentaMensualBase.toString(), coverage.months);
+      const paidCents = receipt.pagos.reduce((sum, payment) => sum + Math.round(Number(payment.monto) * 100), 0);
+      const paid = paidCents >= Math.round(Number(amount) * 100);
+      const latestPayment = receipt.pagos[0];
+      const updatedReceipt = await tx.recibo.update({ where: { id: receipt.id }, data: { periodoFin: coverage.periodEnd, fechaVencimiento: dueDate, monto: amount, cargoFijo: 0, estatus: paid ? EstadoRecibo.PAGADO : calculateReceiptStatus({ currentDate: currentCollectionDate(), dueDate, paid: false }), fechaPago: paid ? latestPayment?.fechaPago ?? null : null, formaPago: paid ? latestPayment?.formaPago ?? null : null } });
+      await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "ACTUALIZAR_RECIBO_CONTRATO", entidad: "Recibo", entidadId: receipt.id, antes: { monto: receipt.monto.toString(), cargoFijo: receipt.cargoFijo.toString(), periodoFin: receipt.periodoFin.toISOString(), fechaVencimiento: receipt.fechaVencimiento.toISOString(), estatus: receipt.estatus }, despues: { monto: updatedReceipt.monto.toString(), cargoFijo: updatedReceipt.cargoFijo.toString(), periodoFin: updatedReceipt.periodoFin.toISOString(), fechaVencimiento: updatedReceipt.fechaVencimiento.toISOString(), estatus: updatedReceipt.estatus } });
+    }
+    await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "ACTUALIZAR", entidad: "Contrato", entidadId: id, antes: { estado: before.estado, fechaInicio: before.fechaInicio.toISOString(), fechaFin: before.fechaFin.toISOString(), fechaProximoCobro: before.fechaProximoCobro?.toISOString() ?? null, periodicidadCobro: before.periodicidadCobro, rentaMensualBase: before.rentaMensualBase.toString(), diaPago: before.diaPago }, despues: { estado: updated.estado, fechaInicio: updated.fechaInicio.toISOString(), fechaFin: updated.fechaFin.toISOString(), fechaProximoCobro: nextCollectionDate.toISOString(), periodicidadCobro: updated.periodicidadCobro, recibosEnRevision: reviewed.count, reciboActualizado: Boolean(receipt), rentaMensualBase: updated.rentaMensualBase.toString(), diaPago: updated.diaPago } });
     return updated;
   });
 }
@@ -1138,6 +1170,7 @@ function normalizarGarantia(data: ContratoInput) {
   const isPagare = data.tipoGarantia === "PAGARE";
   return {
     ...data,
+    cargoFijoMensual: "0.00",
     valorGarantia: data.tipoGarantia === "PRENDA" ? data.valorGarantia ?? null : null,
     avalTelefono: data.tipoGarantia === "AVAL" ? data.avalTelefono ?? null : null,
     avalCorreo: data.tipoGarantia === "AVAL" ? data.avalCorreo ?? null : null,

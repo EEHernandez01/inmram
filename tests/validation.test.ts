@@ -7,7 +7,7 @@ import {
   waterReadingInputSchema,
 } from "../src/lib/validation/water.ts";
 import { propertyReportFilterSchema } from "../src/lib/validation/reports.ts";
-import { paymentInputSchema, paymentReversalInputSchema } from "../src/lib/validation/collection.ts";
+import { paymentInputSchema, paymentReversalInputSchema, receiptReviewResolutionSchema } from "../src/lib/validation/collection.ts";
 import { propertyPhotoUploadSchema } from "../src/lib/validation/property-photos.ts";
 import { altaPropiedadAsistidaSchema } from "../src/lib/validation/property-onboarding.ts";
 import { propietarioCuentaSchema, propietarioInputSchema } from "../src/lib/validation/owners.ts";
@@ -104,6 +104,9 @@ test("valida pagos parciales, referencias y motivos de reversión", () => {
   assert.equal(paymentReversalInputSchema.safeParse({ motivo: "Pago duplicado" }).success, true);
   assert.equal(paymentInputSchema.safeParse({ monto: "0", fechaPago: "2026-08-15", formaPago: "EFECTIVO" }).success, false);
   assert.equal(paymentReversalInputSchema.safeParse({ motivo: "No" }).success, false);
+  assert.equal(receiptReviewResolutionSchema.safeParse({ accion: "SALDO" }).success, true);
+  assert.equal(receiptReviewResolutionSchema.safeParse({ accion: "OMITIR", motivo: "Error de captura" }).success, true);
+  assert.equal(receiptReviewResolutionSchema.safeParse({ accion: "OMITIR", motivo: "No" }).success, false);
 });
 
 test("solo permite cancelar dentro de la vigencia y hasta la fecha actual", () => {
@@ -114,6 +117,7 @@ test("solo permite cancelar dentro de la vigencia y hasta la fecha actual", () =
   assert.equal(isCancellationDateAllowed({ cancellationDate: new Date("2025-12-31T00:00:00.000Z"), startDate, endDate, today }), false);
   assert.equal(isCancellationDateAllowed({ cancellationDate: new Date("2026-09-18T00:00:00.000Z"), startDate, endDate, today }), false);
 });
+
 
 test("el pagaré requiere importe, fechas ordenadas y lugar de pago", () => {
   assert.equal(hasValidPagareDetails({ amount: "25000.00", issueDate: "2026-01-15", dueDate: "2026-12-31", paymentPlace: "Ciudad de México" }), true);

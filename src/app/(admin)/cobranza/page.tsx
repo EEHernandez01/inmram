@@ -34,6 +34,7 @@ export default async function CollectionPage({
     generados?: string;
     notificado?: string;
     pago?: string;
+    revision?: string;
     buscar?: string;
     pagina?: string;
     periodo?: string;
@@ -55,18 +56,16 @@ export default async function CollectionPage({
     user.rol as (typeof WRITE_ROLES)[number],
   );
   const paymentDate = toDateInput(currentCollectionDate());
-  const metrics = [
-    ["Monto esperado", formatCurrency(summary.esperado), "text-brand"],
-    ["Monto cobrado", formatCurrency(summary.cobrado), "text-brand"],
-    ["Porcentaje cobrado", formatPercent(summary.porcentajeCobrado), "text-brand"],
-    ["Recibos vencidos", String(summary.recibosVencidos), "text-danger"],
-    ["Tasa de morosidad", formatPercent(summary.tasaMorosidad), "text-danger"],
-  ] as const;
+  const collectionProgress = Math.min(100, Math.max(0, summary.porcentajeCobrado));
+  const delinquencyProgress = Math.min(100, Math.max(0, summary.tasaMorosidad));
+  const paidCircumference = (collectionProgress / 100) * 2 * Math.PI * 24;
   const statusFilters = [
     { label: "Todos", value: undefined, count: counts?.todos ?? 0 },
     { label: "Por cobrar", value: EstadoRecibo.PENDIENTE, count: counts?.pendientes ?? 0 },
     { label: "Vencidos", value: EstadoRecibo.VENCIDO, count: counts?.vencidos ?? 0 },
     { label: "Pagados", value: EstadoRecibo.PAGADO, count: counts?.pagados ?? 0 },
+    { label: "Revisión", value: EstadoRecibo.REVISION, count: counts?.revision ?? 0 },
+    { label: "Omitidos", value: EstadoRecibo.OMITIDO, count: counts?.omitidos ?? 0 },
   ] as const;
   const defaultPeriodValue = receiptPeriodValue(currentReceiptPeriod());
   const collectionUrl = (nextStatus?: EstadoRecibo, nextPage = 1, nextSearch: string | null | undefined = search, nextPeriod = periodValue) => {
@@ -111,21 +110,58 @@ export default async function CollectionPage({
             : "El movimiento fue revertido y el saldo se recalculó."}
         </Alert>
       ) : null}
+      {query.revision ? <Alert className="mt-6" variant="success">La revisión del recibo se resolvió y quedó registrada en auditoría.</Alert> : null}
       {query.notificado ? (
         <Alert className="mt-6" variant="success">
           Recordatorio enviado correctamente.
         </Alert>
       ) : null}
 
-      <section aria-label="Resumen del periodo" className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        {metrics.map(([label, display, color]) => (
-          <div className="rounded-card border border-border bg-surface p-5" key={label}>
-            <p className="text-xs font-medium text-ink-secondary">{label}</p>
-            <p className={`mt-2 text-2xl font-bold tracking-tight [font-variant-numeric:tabular-nums] ${color}`}>
-              {display}
-            </p>
+      <section aria-label="Resumen del periodo" className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <article className="flex items-center gap-5 rounded-card border border-border bg-surface p-5 sm:col-span-2 lg:col-span-1 lg:row-span-2 lg:flex-col lg:items-start lg:justify-center">
+          <div aria-label={`Avance de cobranza: ${formatPercent(summary.porcentajeCobrado)}`} className="relative grid size-24 shrink-0 place-items-center" role="img">
+            <svg aria-hidden="true" className="size-full -rotate-90" viewBox="0 0 56 56">
+              <circle className="text-brand-soft" cx="28" cy="28" fill="none" r="24" stroke="currentColor" strokeWidth="5" />
+              <circle className="text-brand" cx="28" cy="28" fill="none" r="24" stroke="currentColor" strokeDasharray={`${paidCircumference} ${2 * Math.PI * 24}`} strokeLinecap="round" strokeWidth="5" />
+            </svg>
+            <span aria-hidden="true" className="absolute text-lg font-bold tracking-tight text-brand [font-variant-numeric:tabular-nums]">{formatPercent(summary.porcentajeCobrado)}</span>
           </div>
-        ))}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[.1em] text-ink-secondary">Avance de cobranza</p>
+            <p className="mt-2 text-sm leading-6 text-ink-secondary">De {formatCurrency(summary.esperado)} esperados, se han cobrado {formatCurrency(summary.cobrado)}.</p>
+          </div>
+        </article>
+
+        <article className="rounded-card border border-border bg-surface p-5">
+          <p className="text-xs font-medium text-ink-secondary">Monto esperado</p>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-brand [font-variant-numeric:tabular-nums]">{formatCurrency(summary.esperado)}</p>
+          <p className="mt-1 text-xs text-ink-secondary">Total de recibos del periodo</p>
+        </article>
+
+        <article className="rounded-card border border-border bg-surface p-5">
+          <p className="text-xs font-medium text-ink-secondary">Monto cobrado</p>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-success [font-variant-numeric:tabular-nums]">{formatCurrency(summary.cobrado)}</p>
+          <div aria-label={`${formatPercent(collectionProgress)} del monto esperado cobrado`} className="mt-4 h-2 overflow-hidden rounded-pill bg-brand-soft" role="progressbar" aria-valuemax={100} aria-valuemin={0} aria-valuenow={collectionProgress}>
+            <div className="h-full rounded-pill bg-success transition-[width]" style={{ width: `${collectionProgress}%` }} />
+          </div>
+        </article>
+
+        <article className="rounded-card border border-border bg-surface p-5">
+          <p className="text-xs font-medium text-ink-secondary">Recibos vencidos</p>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-danger [font-variant-numeric:tabular-nums]">{summary.recibosVencidos}</p>
+          <p className="mt-1 text-xs text-ink-secondary">Requieren seguimiento</p>
+        </article>
+
+        <article className="rounded-card border border-border bg-surface p-5">
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="text-xs font-medium text-ink-secondary">Tasa de morosidad</p>
+            <p className="text-lg font-bold tracking-tight text-danger [font-variant-numeric:tabular-nums]">{formatPercent(summary.tasaMorosidad)}</p>
+          </div>
+          <div aria-label={`${formatPercent(delinquencyProgress)} de recibos vencidos`} className="mt-4 h-2 overflow-hidden rounded-pill bg-danger-soft" role="progressbar" aria-valuemax={100} aria-valuemin={0} aria-valuenow={delinquencyProgress}>
+            <div className="h-full rounded-pill bg-danger transition-[width]" style={{ width: `${delinquencyProgress}%` }} />
+          </div>
+          <p className="mt-2 text-xs text-ink-secondary">Proporción de recibos vencidos</p>
+        </article>
       </section>
 
       <section className="mt-7 rounded-card border border-border bg-surface p-5">

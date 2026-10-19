@@ -29,6 +29,13 @@ enum EstadoContrato {
   CANCELADO
 }
 
+enum PeriodicidadCobro {
+  MENSUAL
+  BIMESTRAL
+  SEMESTRAL
+  ANUAL
+}
+
 enum TipoGarantia {
   AVAL
   PRENDA
@@ -40,6 +47,8 @@ enum EstadoRecibo {
   PENDIENTE
   PAGADO
   VENCIDO
+  REVISION
+  OMITIDO
 }
 
 enum FormaPago {
@@ -206,6 +215,9 @@ model Contrato {
   fechaInicio          DateTime          @db.Date
   plazoMeses           Int
   fechaFin             DateTime          @db.Date
+  fechaProximoCobro    DateTime?         @db.Date
+  continuidadMensual   Boolean           @default(false)
+  periodicidadCobro    PeriodicidadCobro @default(MENSUAL)
   rentaMensualBase     Decimal           @db.Decimal(14, 2)
   diaPago              Int
   depositoGarantia     Decimal           @db.Decimal(14, 2)
@@ -249,6 +261,7 @@ model Recibo {
   id               String       @id @default(uuid()) @db.Uuid
   contratoId       String       @db.Uuid
   periodo          DateTime     @db.Date
+  periodoFin       DateTime     @db.Date
   fechaVencimiento DateTime     @db.Date
   monto            Decimal      @db.Decimal(14, 2)
   estatus          EstadoRecibo @default(PENDIENTE)
@@ -264,6 +277,7 @@ model Recibo {
   @@unique([contratoId, periodo])
   @@index([contratoId])
   @@index([periodo])
+  @@index([periodoFin])
   @@index([fechaVencimiento])
   @@index([estatus])
 }

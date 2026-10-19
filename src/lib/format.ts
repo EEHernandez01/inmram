@@ -25,6 +25,13 @@ export function formatDate(value: Date) {
   return new Intl.DateTimeFormat("es-MX", { timeZone: "UTC" }).format(value);
 }
 
+export function formatReceiptPeriodRange(start: Date, end: Date) {
+  const monthYear = (value: Date) => new Intl.DateTimeFormat("es-MX", { month: "long", year: "numeric", timeZone: "UTC" }).format(value);
+  return start.getUTCFullYear() === end.getUTCFullYear() && start.getUTCMonth() === end.getUTCMonth()
+    ? monthYear(start)
+    : `${monthYear(start)} – ${monthYear(end)}`;
+}
+
 export function formatPercent(value: number) {
   return new Intl.NumberFormat("es-MX", {
     maximumFractionDigits: 1,

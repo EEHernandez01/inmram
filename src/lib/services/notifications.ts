@@ -1,11 +1,11 @@
 import "server-only";
 
-import { EstadoContrato } from "@/generated/prisma/enums";
+import { EstadoContrato, EstadoRecibo } from "@/generated/prisma/enums";
 import { requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
 import { calculateReceiptPaymentBalance, calculateReceiptTotal } from "@/lib/calculations/collection";
 import { prisma } from "@/lib/db/prisma";
 import { DomainError } from "@/lib/domain/errors";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatReceiptPeriodRange } from "@/lib/format";
 import { registrarAuditoria } from "@/lib/services/audit";
 import { recordIdSchema } from "@/lib/validation/foundation";
 
@@ -19,13 +19,14 @@ export async function enviarRecordatorioRecibo(receiptId: string) {
   if (!receipt) throw new DomainError("NOT_FOUND", "El recibo no existe.");
   if (receipt.contrato.unidad.propiedad.archivadaEn) throw new DomainError("PROPERTY_ARCHIVED", "La propiedad está archivada y es de solo consulta.");
   if (receipt.contrato.estado !== EstadoContrato.ACTIVO) throw new DomainError("CONTRACT_NOT_ACTIVE", "No se pueden enviar recordatorios de un contrato cancelado o vencido.");
+  if (receipt.estatus === EstadoRecibo.REVISION || receipt.estatus === EstadoRecibo.OMITIDO) throw new DomainError("RECEIPT_NOT_CONFIRMED", "No se envían recordatorios de recibos en revisión u omitidos.");
   if (!receipt.contrato.emailArrendatario) throw new DomainError("MISSING_TENANT_EMAIL", "El contrato no tiene correo del arrendatario.");
-  const servicesCharge = Number(receipt.cargoFijo);
-  const total = calculateReceiptTotal({ rent: Number(receipt.monto), servicesCharge });
+  const total = calculateReceiptTotal({ rent: Number(receipt.monto) });
   const balance = calculateReceiptPaymentBalance({ total, payments: receipt.pagos.map((payment) => ({ amount: Number(payment.monto) })) });
   if (balance.saldoPendiente === 0) throw new DomainError("RECEIPT_SETTLED", "El recibo ya está liquidado.");
   const issuer = user.perfil?.razonSocial || user.perfil?.nombreCompleto || session.user.name || "Administración de rentas";
-  const response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json", "idempotency-key": `recibo-${id}-${new Date().toISOString().slice(0, 10)}`, "user-agent": "inmobiliaria-ramos-rosch/1.0" }, body: JSON.stringify({ from, to: [receipt.contrato.emailArrendatario], subject: `Recordatorio de renta ${receipt.periodo.toISOString().slice(0, 7)}`, text: `Hola ${receipt.contrato.arrendatario}:\n\n${issuer} te recuerda el recibo administrativo de ${receipt.contrato.unidad.propiedad.direccion}, unidad ${receipt.contrato.unidad.identificador}.\nPeriodo: ${receipt.periodo.toISOString().slice(0, 7)}\nFecha límite: ${formatDate(receipt.fechaVencimiento)}\nRenta: ${formatCurrency(receipt.monto)}\nServicios (incluye agua): ${formatCurrency(servicesCharge)}\nTotal del recibo: ${formatCurrency(total)}\nPagado: ${formatCurrency(balance.montoPagado)}\nSaldo pendiente: ${formatCurrency(balance.saldoPendiente)}\nEstado: ${receipt.estatus}.\n\nEste mensaje no es un CFDI ni comprobante fiscal.` }) });
+  const receiptPeriod = formatReceiptPeriodRange(receipt.periodo, receipt.periodoFin);
+  const response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json", "idempotency-key": `recibo-${id}-${new Date().toISOString().slice(0, 10)}`, "user-agent": "inmobiliaria-ramos-rosch/1.0" }, body: JSON.stringify({ from, to: [receipt.contrato.emailArrendatario], subject: `Recordatorio de renta ${receiptPeriod}`, text: `Hola ${receipt.contrato.arrendatario}:\n\n${issuer} te recuerda el recibo administrativo de ${receipt.contrato.unidad.propiedad.direccion}, unidad ${receipt.contrato.unidad.identificador}.\nPeriodo cubierto: ${receiptPeriod}\nFecha límite: ${formatDate(receipt.fechaVencimiento)}\nRenta: ${formatCurrency(receipt.monto)}\nTotal del recibo: ${formatCurrency(total)}\nPagado: ${formatCurrency(balance.montoPagado)}\nSaldo pendiente: ${formatCurrency(balance.saldoPendiente)}\nEstado: ${receipt.estatus}.\n\nEste mensaje no es un CFDI ni comprobante fiscal.` }) });
   if (!response.ok) throw new DomainError("EMAIL_PROVIDER_ERROR", "El proveedor de correo no pudo enviar el recordatorio.");
   const result = await response.json() as { id?: string };
   await prisma.$transaction(async (tx) => registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "ENVIAR_RECORDATORIO", entidad: "Recibo", entidadId: id, despues: { proveedor: "Resend", mensajeId: result.id ?? null, destinatarioConfigurado: true, saldoPendiente: balance.saldoPendiente } }));

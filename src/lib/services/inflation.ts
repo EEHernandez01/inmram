@@ -222,7 +222,7 @@ export async function renovarContrato(contratoId: string, input: unknown) {
       avalTelefono: contract.avalTelefono, avalCorreo: contract.avalCorreo,
       fechaInicio: startDate, fechaFin: inflationDate(data.fechaFin), plazoMeses: data.plazoMeses,
       rentaMensualBase: rent.toFixed(2), diaPago: contract.diaPago,
-      depositoGarantia: contract.depositoGarantia, cargoFijoMensual: contract.cargoFijoMensual,
+      depositoGarantia: contract.depositoGarantia, cargoFijoMensual: "0.00",
       estado: EstadoContrato.ACTIVO,
     } });
     await tx.ajusteInflacion.create({ data: {

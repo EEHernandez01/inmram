@@ -122,9 +122,9 @@ export default async function PropertiesPage({ searchParams }: { searchParams: P
         {archived ? <input name="estado" type="hidden" value="archivadas" /> : null}
         <div className={`grid gap-4 md:grid-cols-2 ${propietarios.length > 0 ? "2xl:grid-cols-[minmax(230px,1.5fr)_minmax(190px,1fr)_minmax(210px,1fr)_minmax(190px,1fr)_auto]" : "2xl:grid-cols-4"}`}>
           <Field label="Buscar propiedad">
-            <div className="flex items-center gap-2 rounded border border-border bg-surface px-3 text-ink focus-within:border-brand">
-              <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-brand" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
-              <Input className="h-11 min-w-0 flex-1 border-0 bg-transparent px-0 focus:border-transparent" defaultValue={buscar} name="buscar" placeholder="Dirección, propietario o marca" type="search" />
+            <div className="relative">
+              <svg aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-brand" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+              <Input className="h-11 pl-9" defaultValue={buscar} name="buscar" placeholder="Dirección, propietario o marca" type="search" />
             </div>
           </Field>
           {propietarios.length > 0 ? <Field label="Propietario"><Select defaultValue={propietario ?? ""} name="propietario"><option value="">Todos los propietarios</option>{propietarios.map((owner) => <option key={owner.id} value={owner.id}>{owner.nombre}</option>)}</Select></Field> : null}

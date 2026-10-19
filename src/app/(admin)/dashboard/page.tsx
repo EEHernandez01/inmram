@@ -55,10 +55,11 @@ export default async function DashboardPage() {
     Math.max(collection.summary.porcentajeCobrado, 0),
     100,
   );
+  const collectionCircumference = (collectionRate / 100) * 2 * Math.PI * 24;
   const pendingPayments = collection.receipts
     .filter(
       (receipt) =>
-        receipt.estatus !== "PAGADO" && receipt.saldoPendiente > 0,
+        (receipt.estatus === "PENDIENTE" || receipt.estatus === "VENCIDO") && receipt.saldoPendiente > 0,
     )
     .sort((first, second) => {
       const firstPriority = first.estatus === "VENCIDO" ? 0 : 1;
@@ -109,7 +110,7 @@ export default async function DashboardPage() {
       />
 
       <section className="mt-7 grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]">
-        <article className="relative overflow-hidden rounded-[2rem] bg-brand p-6 text-white shadow-md sm:p-8">
+        <article className="relative overflow-hidden rounded-card border border-brand/10 bg-brand p-6 text-white sm:p-8">
           <div aria-hidden="true" className="absolute -right-20 -top-20 h-56 w-56 rounded-full border border-white/10 bg-white/5" />
           <div aria-hidden="true" className="absolute -bottom-28 right-20 h-56 w-56 rounded-full bg-white/[.035]" />
           <div className="relative">
@@ -121,15 +122,23 @@ export default async function DashboardPage() {
               <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-bold">{collection.receipts.length} {collection.receipts.length === 1 ? "recibo" : "recibos"}</span>
             </div>
 
-            <div className="mt-8 flex flex-wrap items-end justify-between gap-5">
-              <div>
-                <p className="text-sm text-white/70">Avance de cobranza</p>
-                <p className="mt-1 text-5xl font-bold tracking-[-.05em] [font-variant-numeric:tabular-nums] sm:text-6xl">{formatPercent(collectionRate)}</p>
+            <div className="mt-7 flex flex-col gap-5 sm:flex-row sm:items-center">
+              <div aria-label={`Avance de cobranza: ${formatPercent(collectionRate)}`} className="relative grid size-28 shrink-0 place-items-center self-center sm:self-auto" role="img">
+                <svg aria-hidden="true" className="size-full -rotate-90" viewBox="0 0 56 56">
+                  <circle className="text-white/20" cx="28" cy="28" fill="none" r="24" stroke="currentColor" strokeWidth="5" />
+                  <circle className="text-white" cx="28" cy="28" fill="none" r="24" stroke="currentColor" strokeDasharray={`${collectionCircumference} ${2 * Math.PI * 24}`} strokeLinecap="round" strokeWidth="5" />
+                </svg>
+                <span aria-hidden="true" className="absolute text-xl font-bold tracking-tight [font-variant-numeric:tabular-nums]">{formatPercent(collectionRate)}</span>
               </div>
-              <p className="max-w-[13rem] text-sm leading-6 text-white/70 sm:text-right">{formatCurrency(collection.summary.cobrado)} cobrados de {formatCurrency(collection.summary.esperado)} proyectados.</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-white/80">Avance de cobranza</p>
+                <p className="mt-1 text-sm leading-6 text-white/70">{formatCurrency(collection.summary.cobrado)} cobrados de {formatCurrency(collection.summary.esperado)} esperados.</p>
+                <div aria-label={`${formatPercent(collectionRate)} del monto esperado cobrado`} className="mt-4 h-2.5 overflow-hidden rounded-full bg-white/20" role="progressbar" aria-valuemax={100} aria-valuemin={0} aria-valuenow={collectionRate}>
+                  <div className="h-full rounded-full bg-white" style={{ width: `${collectionRate}%` }} />
+                </div>
+                <div className="mt-2 flex justify-between gap-3 text-xs text-white/65"><span>Cobrado</span><span>Por cobrar {formatCurrency(pendingBalance)}</span></div>
+              </div>
             </div>
-
-            <div aria-label={`${formatPercent(collectionRate)} de cobranza acumulada`} className="mt-6 h-2.5 overflow-hidden rounded-full bg-white/20" role="progressbar" aria-valuemax={100} aria-valuemin={0} aria-valuenow={collectionRate}><div className="h-full rounded-full bg-white shadow-[0_0_16px_rgba(255,255,255,.55)]" style={{ width: `${collectionRate}%` }} /></div>
 
             <div className="mt-7 grid gap-3 border-t border-white/15 pt-5 sm:grid-cols-3">
               <div><p className="text-xs font-semibold uppercase tracking-[.1em] text-white/60">Cobrado</p><p className="mt-1 text-lg font-bold [font-variant-numeric:tabular-nums]">{formatCurrency(collection.summary.cobrado)}</p></div>
@@ -141,26 +150,28 @@ export default async function DashboardPage() {
           </div>
         </article>
 
-        <CollectionFollowUp
-          collectionHref={collectionHref}
-          currentDate={currentDate}
-          hasReceipts={collection.receipts.length > 0}
-          pendingPayments={pendingPayments}
-        />
+        <div className="order-first xl:order-last">
+          <CollectionFollowUp
+            collectionHref={collectionHref}
+            currentDate={currentDate}
+            hasReceipts={collection.receipts.length > 0}
+            pendingPayments={pendingPayments}
+          />
+        </div>
       </section>
 
       <section aria-label="Indicadores del portafolio" className="mt-5 grid gap-4 sm:grid-cols-3">
-        <Link className="group rounded-[1.5rem] border border-border bg-surface p-5 shadow-sm transition-colors hover:border-brand/30" href="/propiedades">
-          <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[.1em] text-brand">Ocupación</p><p className="mt-3 text-3xl font-bold tracking-tight text-ink [font-variant-numeric:tabular-nums]">{occupancyRate === null ? "—" : formatPercent(occupancyRate)}</p></div><span className="rounded-full bg-brand-soft px-2.5 py-1 text-xs font-bold text-brand">{occupiedUnits}/{totalUnits}</span></div>
+        <Link className="group rounded-card border border-border bg-surface p-5 transition-colors hover:border-brand/30" href="/propiedades">
+          <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[.1em] text-brand">Ocupación</p><p className="mt-2 text-2xl font-bold tracking-tight text-ink [font-variant-numeric:tabular-nums]">{occupancyRate === null ? "—" : formatPercent(occupancyRate)}</p><p className="mt-1 text-sm text-ink-secondary">Unidades ocupadas</p></div><div aria-hidden="true" className="relative grid size-16 shrink-0 place-items-center"><svg className="size-full -rotate-90" viewBox="0 0 56 56"><circle className="text-brand-soft" cx="28" cy="28" fill="none" r="24" stroke="currentColor" strokeWidth="5"/><circle className="text-brand" cx="28" cy="28" fill="none" r="24" stroke="currentColor" strokeDasharray={`${occupancyRate === null ? 0 : (Math.min(100, Math.max(0, occupancyRate)) / 100) * 2 * Math.PI * 24} ${2 * Math.PI * 24}`} strokeLinecap="round" strokeWidth="5"/></svg><span className="absolute text-xs font-bold text-brand">{totalUnits === 0 ? "—" : `${occupiedUnits}/${totalUnits}`}</span></div></div>
           <p className="mt-3 text-sm text-ink-secondary">Unidades con contrato activo <span aria-hidden="true" className="ml-1 font-bold text-brand transition-transform group-hover:translate-x-0.5">→</span></p>
         </Link>
 
-        <Link className="group rounded-[1.5rem] border border-border bg-surface p-5 shadow-sm transition-colors hover:border-brand/30" href="/reportes">
+        <Link className="group rounded-card border border-border bg-surface p-5 transition-colors hover:border-brand/30" href="/reportes">
           <div><p className="text-xs font-bold uppercase tracking-[.1em] text-brand">Renta neta proyectada</p><p className="mt-3 text-3xl font-bold tracking-tight text-ink [font-variant-numeric:tabular-nums]">{formatCurrency(profitability.portfolio.monthlyNetIncome)}</p></div>
           <p className="mt-3 text-sm text-ink-secondary">Estimación mensual del portafolio <span aria-hidden="true" className="ml-1 font-bold text-brand transition-transform group-hover:translate-x-0.5">→</span></p>
         </Link>
 
-        <Link className="group rounded-[1.5rem] border border-border bg-surface p-5 shadow-sm transition-colors hover:border-brand/30" href="/contratos">
+        <Link className="group rounded-card border border-border bg-surface p-5 transition-colors hover:border-brand/30" href="/contratos">
           <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[.1em] text-brand">Renovaciones</p><p className="mt-3 text-3xl font-bold tracking-tight text-ink [font-variant-numeric:tabular-nums]">{expiringContractsTotal}</p></div><span className={expiringContractsTotal > 0 ? "rounded-full bg-warning-soft px-2.5 py-1 text-xs font-bold text-warning" : "rounded-full bg-success-soft px-2.5 py-1 text-xs font-bold text-success"}>{expiringContractsTotal > 0 ? "Próximas" : "Al día"}</span></div>
           <p className="mt-3 text-sm text-ink-secondary">Contratos por vencer en 90 días <span aria-hidden="true" className="ml-1 font-bold text-brand transition-transform group-hover:translate-x-0.5">→</span></p>
         </Link>

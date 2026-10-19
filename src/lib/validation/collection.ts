@@ -26,5 +26,10 @@ export const paymentReversalInputSchema = z.object({
   motivo: z.string().trim().min(3, "Indica el motivo de la reversión.").max(500, "El motivo excede la longitud permitida."),
 });
 
+export const receiptReviewResolutionSchema = z.discriminatedUnion("accion", [
+  z.object({ accion: z.literal("SALDO") }),
+  z.object({ accion: z.literal("OMITIR"), motivo: z.string().trim().min(3).max(500) }),
+]);
+
 export type PaymentInput = z.infer<typeof paymentInputSchema>;
 export type PaymentReversalInput = z.infer<typeof paymentReversalInputSchema>;

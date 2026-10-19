@@ -237,6 +237,8 @@ function contractInput(formData: FormData) {
     fechaInicio: value(formData, "fechaInicio"),
     plazoMeses: Number(value(formData, "plazoMeses")),
     fechaFin: value(formData, "fechaFin"),
+    fechaProximoCobro: value(formData, "fechaProximoCobro"),
+    periodicidadCobro: (value(formData, "periodicidadCobro") || "MENSUAL") as "MENSUAL" | "BIMESTRAL" | "SEMESTRAL" | "ANUAL",
     rentaMensualBase: value(formData, "rentaMensualBase"),
     diaPago: Number(value(formData, "diaPago")),
     depositoGarantia: value(formData, "depositoGarantia"),

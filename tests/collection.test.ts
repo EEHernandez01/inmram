@@ -5,6 +5,11 @@ import {
   calculateOverdueDays,
   calculateReceiptDueDate,
   calculateReceiptPaymentBalance,
+  calculateReceiptCoverage,
+  calculatePeriodicCharge,
+  collectionIntervalMonths,
+  collectionPeriodIsEligible,
+  calculateContractReceiptDueDate,
   calculateReceiptStatus,
   calculateReceiptTotal,
   contractOverlapsPeriod,
@@ -20,6 +25,56 @@ test("un pago el día 31 de febrero vence el 1 de marzo", () => {
   assert.equal(calculateReceiptDueDate(period, 31).toISOString(), "2026-03-01T00:00:00.000Z");
 });
 
+test("el primer recibo histórico respeta la fecha elegida y luego vuelve al día pactado", () => {
+  const october = receiptPeriodFromValue("2026-10");
+  const november = receiptPeriodFromValue("2026-11");
+  const december = receiptPeriodFromValue("2026-12");
+  const firstDate = new Date("2026-11-12T00:00:00.000Z");
+  assert.equal(collectionPeriodIsEligible(october, firstDate), false);
+  assert.equal(collectionPeriodIsEligible(november, firstDate), true);
+  assert.equal(calculateContractReceiptDueDate(november, 5, firstDate).toISOString(), firstDate.toISOString());
+  assert.equal(calculateReceiptStatus({ currentDate: new Date("2026-10-13T00:00:00.000Z"), dueDate: firstDate, paid: false }), "PENDIENTE");
+  assert.equal(calculateContractReceiptDueDate(december, 5, firstDate).toISOString(), "2026-12-05T00:00:00.000Z");
+});
+
+test("los contratos existentes sin fecha inicial de cobro conservan el día pactado", () => {
+  const october = receiptPeriodFromValue("2026-10");
+  assert.equal(collectionPeriodIsEligible(october, null), true);
+  assert.equal(calculateContractReceiptDueDate(october, 12, null).toISOString(), "2026-10-12T00:00:00.000Z");
+});
+
+test("la periodicidad determina los meses elegibles desde el próximo cobro", () => {
+  const anchor = new Date("2026-11-12T00:00:00.000Z");
+  assert.equal(collectionPeriodIsEligible(receiptPeriodFromValue("2026-12"), anchor, 2), false);
+  assert.equal(collectionPeriodIsEligible(receiptPeriodFromValue("2027-01"), anchor, 2), true);
+  assert.equal(collectionPeriodIsEligible(receiptPeriodFromValue("2027-05"), anchor, 6), true);
+  assert.equal(collectionPeriodIsEligible(receiptPeriodFromValue("2027-11"), anchor, 12), true);
+  assert.deepEqual(
+    (["MENSUAL", "BIMESTRAL", "SEMESTRAL", "ANUAL"] as const).map(collectionIntervalMonths),
+    [1, 2, 6, 12],
+  );
+});
+
+test("el recibo cubre el intervalo y limita el último periodo al fin del contrato", () => {
+  const coverage = calculateReceiptCoverage(
+    receiptPeriodFromValue("2026-11"),
+    6,
+    new Date("2027-02-14T00:00:00.000Z"),
+  );
+  assert.equal(coverage.months, 4);
+  assert.equal(coverage.periodEnd.toISOString(), "2027-02-28T00:00:00.000Z");
+  assert.equal(
+    calculateReceiptCoverage(receiptPeriodFromValue("2026-12"), 2).periodEnd.toISOString(),
+    "2027-01-31T00:00:00.000Z",
+  );
+});
+
+test("renta y servicios mensuales se multiplican con precisión de centavos", () => {
+  assert.equal(calculatePeriodicCharge("10000.01", 6), "60000.06");
+  assert.equal(calculatePeriodicCharge("450.25", 2), "900.50");
+  assert.throws(() => calculatePeriodicCharge("999999999999.99", 12), RangeError);
+});
+
 test("un recibo vence solamente después de la fecha límite", () => {
   const dueDate = new Date("2026-08-05T00:00:00.000Z");
   assert.equal(calculateReceiptStatus({ currentDate: dueDate, dueDate, paid: false }), "PENDIENTE");
@@ -31,10 +86,10 @@ test("un recibo pagado conserva el estado pagado", () => {
   assert.equal(calculateReceiptStatus({ currentDate: new Date("2026-08-20T00:00:00.000Z"), dueDate: new Date("2026-08-05T00:00:00.000Z"), paid: true }), "PAGADO");
 });
 
-test("el total del recibo suma renta y servicios, incluido el agua, con precisión de centavos", () => {
+test("el total del recibo suma únicamente la renta con precisión de centavos", () => {
   assert.equal(
-    calculateReceiptTotal({ rent: 10_000.1, servicesCharge: 450.25 }),
-    10_450.35,
+    calculateReceiptTotal({ rent: 10_000.1 }),
+    10_000.1,
   );
 });
 
@@ -59,6 +114,7 @@ test("detecta contratos que se cruzan con el periodo", () => {
   const period = receiptPeriodFromValue("2026-08");
   assert.equal(contractOverlapsPeriod({ startDate: new Date("2026-08-15T00:00:00.000Z"), endDate: new Date("2027-08-14T00:00:00.000Z"), period }), true);
   assert.equal(contractOverlapsPeriod({ startDate: new Date("2026-09-01T00:00:00.000Z"), endDate: new Date("2027-08-31T00:00:00.000Z"), period }), false);
+  assert.equal(contractOverlapsPeriod({ startDate: new Date("2015-01-01T00:00:00.000Z"), endDate: new Date("2016-01-01T00:00:00.000Z"), period }), false);
 });
 
 test("calcula inflación acumulada desde niveles oficiales", () => {

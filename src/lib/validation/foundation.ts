@@ -1,11 +1,11 @@
 import { z } from "zod";
 
-import { EstadoContrato, TipoGarantia, TipoUnidad } from "@/generated/prisma/enums";
-import { hasValidPagareDetails } from "@/lib/contracts";
-import { normalizeCurrencyInput } from "@/lib/format";
+import { EstadoContrato, PeriodicidadCobro, TipoGarantia, TipoUnidad } from "../../generated/prisma/enums.ts";
+import { hasValidPagareDetails } from "../contracts.ts";
+import { normalizeCurrencyInput } from "../format.ts";
 
-export { propietarioCuentaSchema, propietarioInputSchema } from "@/lib/validation/owners";
-export type { PropietarioCuentaInput, PropietarioInput } from "@/lib/validation/owners";
+export { propietarioCuentaSchema, propietarioInputSchema } from "./owners.ts";
+export type { PropietarioCuentaInput, PropietarioInput } from "./owners.ts";
 
 const requiredText = z
   .string()
@@ -150,6 +150,8 @@ export const contratoInputSchema = z
     fechaInicio: date,
     plazoMeses: z.coerce.number().int().positive().max(1_200),
     fechaFin: date,
+    fechaProximoCobro: date,
+    periodicidadCobro: z.enum(PeriodicidadCobro).default(PeriodicidadCobro.MENSUAL),
     rentaMensualBase: money,
     diaPago: z.coerce.number().int().min(1).max(31),
     depositoGarantia: money,
@@ -159,12 +161,22 @@ export const contratoInputSchema = z
     estado: z.enum(EstadoContrato),
   })
   .superRefine((input, context) => {
+    const intervalMonths = { MENSUAL: 1, BIMESTRAL: 2, SEMESTRAL: 6, ANUAL: 12 }[input.periodicidadCobro];
+    const maxReceiptAmount = 999_999_999_999.99;
+    for (const field of ["rentaMensualBase", "cargoFijoMensual"] as const) {
+      if (Number(input[field]) > maxReceiptAmount / intervalMonths) {
+        context.addIssue({ code: "custom", message: "El importe por periodo excede el máximo permitido.", path: [field] });
+      }
+    }
     if (input.fechaFin <= input.fechaInicio) {
       context.addIssue({
         code: "custom",
         message: "La fecha final debe ser posterior a la fecha de inicio.",
         path: ["fechaFin"],
       });
+    }
+    if (input.fechaProximoCobro < input.fechaInicio) {
+      context.addIssue({ code: "custom", message: "El próximo cobro no puede ser anterior al inicio del contrato.", path: ["fechaProximoCobro"] });
     }
     if (input.tipoGarantia === TipoGarantia.PRENDA && !input.valorGarantia) {
       context.addIssue({ code: "custom", message: "Captura la valuación de la prenda.", path: ["valorGarantia"] });

@@ -71,9 +71,13 @@ export function ReceiptAction({
   }
 
   const settled = receipt.saldoPendiente === 0;
+  const underReview = receipt.estatus === EstadoRecibo.REVISION;
+  const omitted = receipt.estatus === EstadoRecibo.OMITIDO;
 
   return (
     <div>
+      {underReview ? <div className="mb-4 rounded-xl border border-warning/25 bg-warning-soft/40 p-3"><p className="text-sm font-semibold text-warning">Este recibo está pendiente de revisión; no cuenta como deuda confirmada.</p><div className="mt-3 flex flex-wrap gap-2"><form action={`/api/recibos/${receipt.id}/revision`} method="post"><input name="periodo" type="hidden" value={periodValue} /><input name="accion" type="hidden" value="SALDO" /><Button type="submit" variant="secondary">Confirmar saldo pendiente</Button></form><form action={`/api/recibos/${receipt.id}/revision`} className="flex flex-wrap items-end gap-2" method="post"><input name="periodo" type="hidden" value={periodValue} /><input name="accion" type="hidden" value="OMITIR" /><label className="text-xs font-semibold text-ink-secondary">Motivo para omitir<input className="mt-1 block w-full rounded border border-border bg-surface px-2 py-2 text-sm text-ink" maxLength={500} minLength={3} name="motivo" required /></label><Button type="submit" variant="secondary">Omitir recibo</Button></form></div></div> : null}
+      {omitted ? <p className="mb-4 text-sm text-ink-secondary">Recibo omitido de cobranza; se conserva para consulta.</p> : null}
       {settled ? <p className="text-sm font-semibold text-success">Recibo liquidado</p> : <form action={`/api/recibos/${receipt.id}/pago`} className={mobile ? "grid gap-3 sm:grid-cols-2" : "grid gap-3 sm:grid-cols-2 xl:grid-cols-4"} method="post">
         <input name="periodo" type="hidden" value={periodValue} />
         <label className="text-xs font-semibold text-ink-secondary"><span className="block">Importe</span><MoneyInput className="mt-1 block w-full" defaultValue={receipt.saldoPendiente.toFixed(2)} name="monto" required /></label>
@@ -96,7 +100,7 @@ export function ReceiptDocuments({
     <div className="mb-3 flex flex-wrap items-center gap-3">
       <a className="inline-flex items-center justify-center rounded border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-brand transition-colors hover:bg-bg hover:text-brand-hover" href={`/api/recibos/${receipt.id}/pdf`} rel="noreferrer" target="_blank">Ver solicitud de pago</a>
       {receipt.estatus === EstadoRecibo.PAGADO ? <a className="text-sm font-semibold text-brand hover:text-brand-hover" href={`/api/recibos/${receipt.id}/comprobante-pago`} rel="noreferrer" target="_blank">Ver comprobante de pago</a> : null}
-      {canWrite && receipt.contrato.estado === "ACTIVO" && receipt.contrato.emailArrendatario && receipt.estatus !== EstadoRecibo.PAGADO ? <form action={`/api/recibos/${receipt.id}/notificar`} method="post"><input name="periodo" type="hidden" value={periodValue} /><ConfirmSubmitButton className="inline-flex items-center justify-center rounded border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-brand transition-colors hover:bg-bg hover:text-brand-hover" message={`¿Enviar recordatorio a ${receipt.contrato.emailArrendatario}?`}>Enviar recordatorio</ConfirmSubmitButton></form> : null}
+      {canWrite && receipt.contrato.estado === "ACTIVO" && receipt.contrato.emailArrendatario && receipt.estatus !== EstadoRecibo.PAGADO && receipt.estatus !== EstadoRecibo.REVISION && receipt.estatus !== EstadoRecibo.OMITIDO ? <form action={`/api/recibos/${receipt.id}/notificar`} method="post"><input name="periodo" type="hidden" value={periodValue} /><ConfirmSubmitButton className="inline-flex items-center justify-center rounded border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-brand transition-colors hover:bg-bg hover:text-brand-hover" message={`¿Enviar recordatorio a ${receipt.contrato.emailArrendatario}?`}>Enviar recordatorio</ConfirmSubmitButton></form> : null}
     </div>
   );
 }
