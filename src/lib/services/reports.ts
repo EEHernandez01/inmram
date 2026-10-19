@@ -13,11 +13,22 @@ export async function obtenerReporteRentabilidad(propertyFilter?: unknown) {
   const propertyId = parsed || undefined;
   const [properties, options] = await Promise.all([
     prisma.propiedad.findMany({
-      where: { id: propertyId, unidades: ownerId ? { some: { propietarioId: ownerId } } : undefined },
+      where: {
+        id: propertyId,
+        archivadaEn: null,
+        unidades: ownerId ? { some: { propietarioId: ownerId } } : undefined,
+      },
       orderBy: { direccion: "asc" },
       include: { unidades: { orderBy: { identificador: "asc" }, include: { contratos: { where: { estado: EstadoContrato.ACTIVO }, orderBy: { fechaInicio: "desc" }, take: 1 } } } },
     }),
-    prisma.propiedad.findMany({ where: { unidades: ownerId ? { some: { propietarioId: ownerId } } : undefined }, orderBy: { direccion: "asc" }, select: { id: true, direccion: true } }),
+    prisma.propiedad.findMany({
+      where: {
+        archivadaEn: null,
+        unidades: ownerId ? { some: { propietarioId: ownerId } } : undefined,
+      },
+      orderBy: { direccion: "asc" },
+      select: { id: true, direccion: true },
+    }),
   ]);
 
   const propertyReports = properties.map((property) => {

@@ -1,24 +1,65 @@
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
-import { formatCurrency, formatPercent } from "@/lib/format";
+import { PropertyFilter } from "@/components/reports/property-filter";
+import { ProfitabilitySummary } from "@/components/reports/profitability-summary";
+import { PropertyProfitability } from "@/components/reports/property-profitability";
 import { obtenerReporteRentabilidad } from "@/lib/services/reports";
 
-function percentage(value: number | null) { return value === null ? "N/D" : formatPercent(value); }
-
-export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ propiedad?: string }> }) {
+export default async function ReportsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ propiedad?: string }>;
+}) {
   const query = await searchParams;
   const report = await obtenerReporteRentabilidad(query.propiedad);
   const selected = query.propiedad ?? "";
-  return <>
-    <PageHeader action={<a className="rounded bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover" href={`/api/reportes/rentabilidad?propiedad=${encodeURIComponent(selected)}`}>Exportar CSV</a>} eyebrow="Análisis" title="Rentabilidad" description="Resultados proyectados con renta vigente y predial, mantenimiento y valor comercial prorrateados por m². Otros gastos: MXN$ 0.00." />
-    <section className="mt-7 rounded-card border border-border bg-surface p-5"><form className="flex flex-col gap-3 sm:flex-row sm:items-end"><label className="text-sm font-semibold text-ink"><span className="mb-2 block">Propiedad</span><select className="min-w-72 rounded border border-border bg-surface px-3 py-2.5 text-sm text-ink" defaultValue={selected} name="propiedad"><option value="">Todo el portafolio</option>{report.propertyOptions.map((property) => <option key={property.id} value={property.id}>{property.direccion}</option>)}</select></label><button className="rounded border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-ink hover:bg-bg">Aplicar filtro</button></form></section>
-    <section className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{[
-      ["Renta mensual", formatCurrency(report.portfolio.monthlyRent)],
-      ["Gastos mensuales", formatCurrency(report.portfolio.monthlyExpenses)],
-      ["Ingreso neto", formatCurrency(report.portfolio.monthlyNetIncome)],
-      ["Rentabilidad anual", percentage(report.portfolio.annualReturn)],
-      ["Rentabilidad bruta", percentage(report.portfolio.grossAnnualReturn)],
-    ].map(([label, value]) => <div className="rounded-card border border-border bg-surface p-5" key={label}><p className="text-xs font-medium text-ink-secondary">{label}</p><p className="mt-2 text-2xl font-bold tracking-tight text-brand [font-variant-numeric:tabular-nums]">{value}</p></div>)}</section>
-    <section className="mt-7 space-y-6">{report.properties.length === 0 ? <EmptyState title="Sin propiedades" description="No hay información disponible para calcular rentabilidad." /> : report.properties.map((property) => <article key={property.id}><div className="mb-3 flex flex-wrap items-end justify-between gap-2"><div><h2 className="text-sm font-semibold text-ink">{property.direccion}</h2><p className="mt-1 text-xs text-ink-secondary">{property.propertyArea.toLocaleString("es-MX")} m² registrados</p></div><p className="text-sm font-semibold text-brand [font-variant-numeric:tabular-nums]">Rentabilidad anual: {percentage(property.annualReturn)}</p></div><div className="overflow-x-auto rounded-card border border-border bg-surface"><table className="w-full min-w-[1250px] text-left text-sm"><thead className="border-b border-border text-xs font-semibold uppercase tracking-wide text-ink-secondary"><tr><th className="px-5 py-3">Unidad</th><th className="px-5 py-3 text-right">m²</th><th className="px-5 py-3 text-right">Renta</th><th className="px-5 py-3 text-right">Predial</th><th className="px-5 py-3 text-right">Mantenimiento</th><th className="px-5 py-3 text-right">Ingreso neto</th><th className="px-5 py-3 text-right">Renta/m²</th><th className="px-5 py-3 text-right">Neto/m²</th><th className="px-5 py-3 text-right">Anual</th><th className="px-5 py-3 text-right">Bruta</th></tr></thead><tbody className="divide-y divide-border">{property.units.map((unit) => <tr className="hover:bg-bg/50" key={unit.id}><td className="px-5 py-4"><p className="font-semibold text-ink">{unit.identificador}</p><p className="mt-1 text-xs text-ink-secondary">{unit.tieneContratoActivo ? "Contrato activo" : "Sin renta vigente"}</p></td><td className="px-5 py-4 text-right [font-variant-numeric:tabular-nums]">{unit.metrosCuadrados}</td><td className="px-5 py-4 text-right font-semibold [font-variant-numeric:tabular-nums]">{formatCurrency(unit.monthlyRent)}</td><td className="px-5 py-4 text-right [font-variant-numeric:tabular-nums]">{formatCurrency(unit.monthlyTax)}</td><td className="px-5 py-4 text-right [font-variant-numeric:tabular-nums]">{formatCurrency(unit.monthlyMaintenance)}</td><td className="px-5 py-4 text-right font-semibold [font-variant-numeric:tabular-nums]">{formatCurrency(unit.monthlyNetIncome)}</td><td className="px-5 py-4 text-right [font-variant-numeric:tabular-nums]">{formatCurrency(unit.rentPerSquareMeter)}</td><td className="px-5 py-4 text-right [font-variant-numeric:tabular-nums]">{formatCurrency(unit.netIncomePerSquareMeter)}</td><td className="px-5 py-4 text-right font-semibold [font-variant-numeric:tabular-nums]">{percentage(unit.annualReturn)}</td><td className="px-5 py-4 text-right [font-variant-numeric:tabular-nums]">{percentage(unit.grossAnnualReturn)}</td></tr>)}</tbody></table></div></article>)}</section>
-  </>;
+
+  return (
+    <>
+      <PageHeader
+        action={
+          <div className="flex flex-wrap gap-2">
+            <a
+              className="inline-flex min-h-11 items-center justify-center rounded-card border border-border bg-surface px-4 py-2.5 text-sm font-bold text-ink transition-colors hover:bg-bg"
+              href="/reportes/pagos"
+            >
+              Reporte de pagos
+            </a>
+            <a
+              className="inline-flex min-h-11 items-center justify-center rounded-card bg-brand px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-brand-hover"
+              href={`/api/reportes/rentabilidad?propiedad=${encodeURIComponent(selected)}`}
+            >
+              Descargar CSV
+            </a>
+          </div>
+        }
+        description="Estimación con renta vigente y gastos de predial y mantenimiento prorrateados por m². Otros gastos: MXN$ 0.00."
+        eyebrow="Análisis"
+        title="Rentabilidad"
+      />
+
+      <PropertyFilter options={report.propertyOptions} selected={selected} />
+
+      {report.properties.length === 0 ? (
+        <div className="mt-7">
+          <EmptyState title="Sin propiedades" description="No hay información disponible para calcular rentabilidad." />
+        </div>
+      ) : (
+        <>
+          <ProfitabilitySummary portfolio={report.portfolio} />
+
+          <section aria-label="Detalle por propiedad" className="mt-9 space-y-7">
+            <div>
+              <h2 className="font-serif text-2xl font-semibold text-ink">Desglose por propiedad</h2>
+              <p className="mt-1 text-sm text-ink-secondary">Consulta el rendimiento de cada unidad y abre sus datos detallados cuando los necesites.</p>
+            </div>
+
+            {report.properties.map((property) => (
+              <PropertyProfitability key={property.id} property={property} />
+            ))}
+          </section>
+        </>
+      )}
+    </>
+  );
 }
