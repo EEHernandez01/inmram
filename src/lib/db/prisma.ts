@@ -31,6 +31,7 @@ function createPrismaClient() {
   if (sslRootCertificate) {
     const url = new URL(connectionString);
     for (const parameter of [
+      "ssl",
       "sslmode",
       "sslrootcert",
       "sslcert",
