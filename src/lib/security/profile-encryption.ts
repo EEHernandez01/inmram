@@ -2,10 +2,10 @@ import "server-only";
 
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
-const secret = process.env.NEON_AUTH_COOKIE_SECRET;
+const secret = process.env.PROFILE_ENCRYPTION_KEY;
 
 if (!secret || secret.length < 32) {
-  throw new Error("NEON_AUTH_COOKIE_SECRET no permite proteger datos personales.");
+  throw new Error("PROFILE_ENCRYPTION_KEY no permite proteger datos personales.");
 }
 
 const key = createHash("sha256")

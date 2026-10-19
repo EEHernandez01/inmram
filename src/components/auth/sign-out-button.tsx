@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { authClient } from "@/lib/auth/client";
+import { createClient } from "@/lib/supabase/client";
 
 export function SignOutButton({ className = "" }: { className?: string }) {
   const [isPending, setIsPending] = useState(false);
@@ -13,9 +13,9 @@ export function SignOutButton({ className = "" }: { className?: string }) {
     setError(null);
 
     try {
-      const result = await authClient.signOut();
+      const { error: resultError } = await createClient().auth.signOut();
 
-      if (result.error) {
+      if (resultError) {
         setError("No fue posible cerrar la sesión. Inténtalo nuevamente.");
         return;
       }

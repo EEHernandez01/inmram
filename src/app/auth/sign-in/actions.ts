@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { auth } from "@/lib/auth/server";
+import { createClient } from "@/lib/supabase/server";
 
 const signInSchema = z.object({
   email: z.string().trim().email(),
@@ -40,7 +40,8 @@ export async function signInWithEmail(
     };
   }
 
-  const { error } = await auth.signIn.email(input.data);
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithPassword(input.data);
 
   if (error) {
     return {

@@ -1,8 +1,4 @@
-import { auth } from "@/lib/auth/server";
-
-export default auth.middleware({
-  loginUrl: "/auth/sign-in",
-});
+export { updateSession as proxy } from "@/lib/supabase/proxy";
 
 export const config = {
   matcher: [
@@ -10,7 +6,6 @@ export const config = {
     "/propiedades/:path*",
     "/contratos/:path*",
     "/cobranza/:path*",
-    "/inflacion/:path*",
     "/inflacion/:path*",
     "/agua/:path*",
     "/reportes/:path*",

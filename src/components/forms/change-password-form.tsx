@@ -5,7 +5,7 @@ import { type FormEvent, useState } from "react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/form-controls";
-import { authClient } from "@/lib/auth/client";
+import { createClient } from "@/lib/supabase/client";
 
 export function ChangePasswordForm() {
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +17,6 @@ export function ChangePasswordForm() {
     if (pending) return;
     const form = event.currentTarget;
     const data = new FormData(form);
-    const currentPassword = String(data.get("currentPassword") ?? "");
     const newPassword = String(data.get("newPassword") ?? "");
     const confirmation = String(data.get("confirmation") ?? "");
     setError(null);
@@ -27,7 +26,8 @@ export function ChangePasswordForm() {
 
     setPending(true);
     try {
-      await authClient.changePassword({ currentPassword, newPassword }, { throw: true });
+      const { error } = await createClient().auth.updateUser({ password: newPassword });
+      if (error) throw error;
       form.reset();
       setSuccess(true);
     } catch (cause) {
@@ -42,7 +42,6 @@ export function ChangePasswordForm() {
       {error ? <Alert variant="danger">{error}</Alert> : null}
       {success ? <Alert variant="success">Contraseña actualizada correctamente.</Alert> : null}
       <div className="grid gap-5 md:grid-cols-3">
-        <Field label="Contraseña actual"><Input autoComplete="current-password" name="currentPassword" required type="password" /></Field>
         <Field label="Nueva contraseña"><Input autoComplete="new-password" minLength={8} name="newPassword" required type="password" /></Field>
         <Field label="Confirmar nueva contraseña"><Input autoComplete="new-password" minLength={8} name="confirmation" required type="password" /></Field>
       </div>

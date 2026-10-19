@@ -1,8 +1,6 @@
 import "server-only";
 
-import { neonConfig } from "@neondatabase/serverless";
-import { PrismaNeon } from "@prisma/adapter-neon";
-import ws from "ws";
+import { PrismaPg } from "@prisma/adapter-pg";
 
 import { PrismaClient } from "@/generated/prisma/client";
 
@@ -12,17 +10,15 @@ if (!connectionString) {
   throw new Error("DATABASE_URL no está configurada.");
 }
 
-neonConfig.webSocketConstructor = ws;
-
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
   prismaSchemaVersion?: string;
 };
 
-const prismaSchemaVersion = "20260922000100";
+const prismaSchemaVersion = "20261013000200";
 
 function createPrismaClient() {
-  const adapter = new PrismaNeon({ connectionString });
+  const adapter = new PrismaPg({ connectionString });
 
   return new PrismaClient({ adapter });
 }

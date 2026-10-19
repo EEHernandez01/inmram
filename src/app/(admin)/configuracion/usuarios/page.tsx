@@ -25,7 +25,7 @@ export default async function UsersPage() {
       <section className="mt-7 rounded-card border border-border bg-surface p-5 sm:p-7">
         <h2 className="text-sm font-semibold text-ink">Usuarios del sistema</h2>
         <p className="mt-1 text-sm text-ink-secondary">
-          Las contraseñas se guardan exclusivamente en Neon Auth. Las cuentas con rol Propietario se vinculan al catálogo interno.
+          Las contraseñas se guardan exclusivamente en Supabase Auth. Las cuentas con rol Propietario se vinculan al catálogo interno.
         </p>
         <div className="mt-5">
           <AdminUserForm owners={owners} users={users} />

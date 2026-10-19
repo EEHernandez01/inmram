@@ -1,7 +1,5 @@
-import { neonConfig } from "@neondatabase/serverless";
-import { PrismaNeon } from "@prisma/adapter-neon";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client.ts";
-import ws from "ws";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -10,10 +8,8 @@ if (!connectionString) {
   process.exit(1);
 }
 
-neonConfig.webSocketConstructor = ws;
-
 const prisma = new PrismaClient({
-  adapter: new PrismaNeon({ connectionString }),
+  adapter: new PrismaPg({ connectionString }),
 });
 
 try {

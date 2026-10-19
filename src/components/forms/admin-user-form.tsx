@@ -5,7 +5,6 @@ import { type FormEvent, useEffect, useState } from "react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/form-controls";
-import { authClient } from "@/lib/auth/client";
 
 type Role = "ADMINISTRADOR" | "GESTOR" | "PROPIETARIO" | "SOLO_LECTURA";
 type OwnerOption = { value: string; nombre: string; detalle: string };
@@ -57,8 +56,8 @@ export function AdminUserForm({ users = [], owners = [] }: { users?: SystemUser[
   const [emails, setEmails] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    void authClient.admin.listUsers({ query: { limit: 100 } }).then((result) => {
-      const authUsers = (result.data?.users ?? []) as AuthUser[];
+    void fetch("/api/configuracion/usuarios").then((response) => response.json()).then((result) => {
+      const authUsers = (result.users ?? []) as AuthUser[];
       setEmails(Object.fromEntries(authUsers.map((user) => [user.id, user.email])));
     }).catch(() => undefined);
   }, []);
@@ -73,13 +72,7 @@ export function AdminUserForm({ users = [], owners = [] }: { users?: SystemUser[
       if (password !== form.get("passwordConfirm")) throw new Error("Las contraseñas no coinciden.");
       const email = String(form.get("email")); const nombreCompleto = String(form.get("nombreCompleto"));
       const propietarioId = newRole === "PROPIETARIO" ? newOwnerId : null;
-      const created = await authClient.admin.createUser({ email, password, name: nombreCompleto, role: "user" }, { throw: true });
-      try {
-        await save({ neonAuthUserId: created.user.id, rol: newRole, nombreCompleto, propietarioId });
-      } catch (saveError) {
-        await authClient.admin.removeUser({ userId: created.user.id }, { throw: true }).catch(() => undefined);
-        throw saveError;
-      }
+      await save({ email, password, rol: newRole, nombreCompleto, propietarioId });
       window.location.reload();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "No fue posible crear el usuario."); setPending(false); }
   }
@@ -100,8 +93,7 @@ export function AdminUserForm({ users = [], owners = [] }: { users?: SystemUser[
     const password = String(new FormData(form).get("newPassword") || "");
     if (password.length < 8) return setError("Captura una nueva contraseña de al menos 8 caracteres.");
     try {
-      await authClient.admin.setUserPassword({ userId: user.neonAuthUserId, newPassword: password }, { throw: true });
-      await save({ id: user.id, action: "PASSWORD_RESET" }, "PATCH");
+      await save({ id: user.id, action: "PASSWORD_RESET", newPassword: password }, "PATCH");
       form.reset(); alert("Contraseña restablecida correctamente.");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "No fue posible restablecer la contraseña."); }
   }
