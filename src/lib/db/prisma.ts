@@ -4,10 +4,13 @@ import { PrismaPg } from "@prisma/adapter-pg";
 
 import { PrismaClient } from "@/generated/prisma/client";
 
-const connectionString = process.env.DATABASE_URL;
+const connectionString =
+  process.env.DATABASE_URL ?? process.env.POSTGRES_PRISMA_URL;
 
 if (!connectionString) {
-  throw new Error("DATABASE_URL no está configurada.");
+  throw new Error(
+    "DATABASE_URL o POSTGRES_PRISMA_URL no está configurada.",
+  );
 }
 
 const globalForPrisma = globalThis as unknown as {
