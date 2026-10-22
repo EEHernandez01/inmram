@@ -22,9 +22,11 @@ function PaymentHistory({
   if (receipt.pagos.length === 0) return null;
 
   return (
-    <details className="mt-4 rounded-xl border border-border bg-bg/60 p-3 text-xs">
+    <details className="rounded-xl border border-border bg-bg/60 p-3 text-xs">
       <summary className="cursor-pointer font-semibold text-ink">
-        Historial de movimientos ({receipt.pagos.length})
+        <span className="inline-flex min-h-9 items-center rounded-lg border border-border bg-surface px-3 py-1.5 text-brand transition-colors hover:bg-bg">
+          Ver historial de pagos ({receipt.pagos.length})
+        </span>
       </summary>
       <ul className="mt-3 space-y-3">
         {receipt.pagos.map((payment) => (
@@ -67,7 +69,7 @@ export function ReceiptAction({
   receipt,
 }: ReceiptActionProps) {
   if (!canWrite) {
-    return <div><span className="text-xs text-ink-secondary">Solo consulta</span><PaymentHistory canWrite={false} periodValue={periodValue} receipt={receipt} /></div>;
+    return <span className="text-xs text-ink-secondary">Solo consulta</span>;
   }
 
   const settled = receipt.saldoPendiente === 0;
@@ -86,7 +88,6 @@ export function ReceiptAction({
         <label className="text-xs font-semibold text-ink-secondary"><span className="block">Referencia (opcional)</span><input className="mt-1 block w-full rounded border border-border bg-surface px-2 py-2 text-sm text-ink" maxLength={100} name="referencia" /></label>
         <Button className="w-full px-3 py-2 sm:w-auto sm:self-end" type="submit">Registrar pago</Button>
       </form>}
-      <PaymentHistory canWrite={canWrite} periodValue={periodValue} receipt={receipt} />
     </div>
   );
 }
@@ -99,7 +100,7 @@ export function ReceiptDocuments({
   return (
     <div className="mb-3 flex flex-wrap items-center gap-3">
       <a className="inline-flex items-center justify-center rounded border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-brand transition-colors hover:bg-bg hover:text-brand-hover" href={`/api/recibos/${receipt.id}/pdf`} rel="noreferrer" target="_blank">Ver solicitud de pago</a>
-      {receipt.estatus === EstadoRecibo.PAGADO ? <a className="text-sm font-semibold text-brand hover:text-brand-hover" href={`/api/recibos/${receipt.id}/comprobante-pago`} rel="noreferrer" target="_blank">Ver comprobante de pago</a> : null}
+      <PaymentHistory canWrite={canWrite} periodValue={periodValue} receipt={receipt} />
       {canWrite && receipt.contrato.estado === "ACTIVO" && receipt.contrato.emailArrendatario && receipt.estatus !== EstadoRecibo.PAGADO && receipt.estatus !== EstadoRecibo.REVISION && receipt.estatus !== EstadoRecibo.OMITIDO ? <form action={`/api/recibos/${receipt.id}/notificar`} method="post"><input name="periodo" type="hidden" value={periodValue} /><ConfirmSubmitButton className="inline-flex items-center justify-center rounded border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-brand transition-colors hover:bg-bg hover:text-brand-hover" message={`¿Enviar recordatorio a ${receipt.contrato.emailArrendatario}?`}>Enviar recordatorio</ConfirmSubmitButton></form> : null}
     </div>
   );
