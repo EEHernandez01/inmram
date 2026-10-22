@@ -54,7 +54,7 @@ export default async function ContractDetailPage({ params, searchParams }: { par
   ];
 
   return <>
-    <PageHeader action={canEdit ? <Link className="cursor-pointer rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover" href={`/contratos/${id}/editar`}>Editar contrato</Link> : null} description={`${contract.unidad.propiedad.direccion} · Unidad ${contract.unidad.identificador}`} eyebrow={contract.estado === "CANCELADO" ? "Contrato cancelado" : "Contrato"} title={contract.arrendatario} />
+    <PageHeader action={canEdit ? <Link className="cursor-pointer rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover" href={`/contratos/${id}/editar`}>Editar contrato</Link> : null} description={contract.arrendatario} eyebrow={contract.estado === "CANCELADO" ? "Contrato cancelado" : "Contrato"} title={`${contract.unidad.propiedad.direccion} · Unidad ${contract.unidad.identificador}`} />
     {contract.unidad.propiedad.archivadaEn ? <Alert className="mt-7" variant="warning">Propiedad archivada: este contrato y sus recibos son solo consulta.</Alert> : null}
     {contract.estado === "CANCELADO" ? <Alert className="mt-7" variant="warning">Contrato cancelado el {formatDate(contract.canceladoEn!)}. Se conserva su historial, pero ya no genera cobros, recordatorios ni renovaciones.</Alert> : null}
     {query.cancelado ? <Alert className="mt-7" variant="success">Contrato cancelado correctamente. Los recibos y pagos ya emitidos se conservaron.</Alert> : null}
