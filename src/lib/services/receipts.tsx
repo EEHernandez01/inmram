@@ -54,11 +54,14 @@ export async function generarRecibosCobranzaPdf({
   if (included.length === 0) throw new DomainError("NOT_FOUND", "No hay recibos para imprimir con los criterios seleccionados.");
 
   const issuer = user.perfil?.razonSocial || user.perfil?.nombreCompleto || session.user.name || "Administración de rentas";
+  const ownerIds = [...new Set(included.map((receipt) => receipt.contrato.unidad.propietarioId))];
+  const owners = await prisma.propietario.findMany({ where: { id: { in: ownerIds } }, select: { id: true, nombre: true } });
+  const ownerNames = new Map(owners.map((owner) => [owner.id, owner.nombre]));
   const pages = included.map((receipt) => {
     const total = calculateReceiptTotal({ rent: Number(receipt.monto) });
     return {
       issuer,
-      owner: receipt.contrato.unidad.propietario.nombre,
+      owner: ownerNames.get(receipt.contrato.unidad.propietarioId) ?? "Propietario",
       tenant: receipt.contrato.arrendatario,
       total: formatCurrency(total),
       totalInWords: amountInWords(total),
