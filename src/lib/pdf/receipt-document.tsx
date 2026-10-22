@@ -10,11 +10,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 66,
     paddingTop: 120,
   },
-  date: { fontSize: 12, textAlign: "right" },
+  date: { fontSize: 12, marginTop: 24, textAlign: "right" },
   content: { flexGrow: 1, justifyContent: "center" },
-  paragraph: { fontSize: 13, lineHeight: 1.55, marginHorizontal: 42, textAlign: "justify" },
+  paragraph: { fontSize: 13, lineHeight: 1.55, textAlign: "justify" },
   emphasis: { fontFamily: "Helvetica-Bold" },
-  signature: { marginHorizontal: 42, marginTop: 70, width: 250 },
+  signature: { marginTop: 70, width: 250 },
   salutation: { fontFamily: "Helvetica-Bold", fontSize: 11, letterSpacing: 3 },
   signatureSpace: { height: 56 },
   signer: { fontFamily: "Helvetica-Bold", fontSize: 12 },
@@ -23,6 +23,7 @@ const styles = StyleSheet.create({
 
 export type ReceiptPdfData = {
   issuer: string;
+  owner: string;
   tenant: string;
   total: string;
   totalInWords: string;
@@ -33,8 +34,11 @@ export type ReceiptPdfData = {
 };
 
 export function ReceiptDocument({ data }: { data: ReceiptPdfData }) {
-  return <Document title="Recibo" author={data.issuer}>
-    <Page size="LETTER" style={styles.page}>
+  return <Document title="Recibo" author={data.issuer}><ReceiptPage data={data} /></Document>;
+}
+
+export function ReceiptPage({ data }: { data: ReceiptPdfData }) {
+  return <Page size="LETTER" style={styles.page}>
       <Text style={styles.date}>{data.issuedAt}</Text>
       <View style={styles.content}>
         <Text style={styles.paragraph}>
@@ -43,10 +47,9 @@ export function ReceiptDocument({ data }: { data: ReceiptPdfData }) {
         <View style={styles.signature}>
           <Text style={styles.salutation}>ATENTAMENTE</Text>
           <View style={styles.signatureSpace} />
-          <Text style={styles.signer}>{data.issuer}</Text>
-          <Text style={styles.signerRole}>Apoderado Legal</Text>
+          <Text style={styles.signer}>{data.owner}</Text>
+          <Text style={styles.signerRole}>Dueño</Text>
         </View>
       </View>
-    </Page>
-  </Document>;
+    </Page>;
 }

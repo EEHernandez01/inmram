@@ -1,26 +1,29 @@
 import "server-only";
 
-import { renderToBuffer } from "@react-pdf/renderer";
+import { Document, renderToBuffer } from "@react-pdf/renderer";
 
 import { getOwnerScope, READ_ROLES, requireSystemRole } from "@/lib/auth/authorization";
-import { calculateReceiptTotal } from "@/lib/calculations/collection";
+import { calculateReceiptTotal, receiptPeriodFromValue } from "@/lib/calculations/collection";
 import { prisma } from "@/lib/db/prisma";
 import { DomainError } from "@/lib/domain/errors";
 import { formatCurrency, formatReceiptPeriodRange } from "@/lib/format";
 import { PaymentReceiptDocument } from "@/lib/pdf/payment-receipt-document";
-import { ReceiptDocument } from "@/lib/pdf/receipt-document";
+import { ReceiptDocument, ReceiptPage } from "@/lib/pdf/receipt-document";
+import { listarCobranzaMensual } from "@/lib/services/collection";
 import { recordIdSchema } from "@/lib/validation/foundation";
+import type { EstadoRecibo } from "@/generated/prisma/enums";
 
 export async function generarReciboPdf(receiptId: string) {
   const { user, session } = await requireSystemRole(READ_ROLES);
   const ownerId = await getOwnerScope();
   const id = recordIdSchema.parse(receiptId);
-  const receipt = await prisma.recibo.findFirst({ where: { id, contrato: ownerId ? { unidad: { propietarioId: ownerId } } : undefined }, include: { contrato: { include: { unidad: { include: { propiedad: true } } } }, pagos: { where: { anuladoEn: null } } } });
+  const receipt = await prisma.recibo.findFirst({ where: { id, contrato: ownerId ? { unidad: { propietarioId: ownerId } } : undefined }, include: { contrato: { include: { unidad: { include: { propiedad: true, propietario: true } } } }, pagos: { where: { anuladoEn: null } } } });
   if (!receipt) throw new DomainError("NOT_FOUND", "El recibo no existe.");
   const total = calculateReceiptTotal({ rent: Number(receipt.monto) });
   const issuer = user.perfil?.razonSocial || user.perfil?.nombreCompleto || session.user.name || "Administración de rentas";
   const data = {
     issuer,
+    owner: receipt.contrato.unidad.propietario.nombre,
     tenant: receipt.contrato.arrendatario,
     total: formatCurrency(total),
     totalInWords: amountInWords(total),
@@ -30,6 +33,42 @@ export async function generarReciboPdf(receiptId: string) {
     issuedAt: formatLetterDate(new Date()),
   };
   return renderToBuffer(<ReceiptDocument data={data} />);
+}
+
+export async function generarRecibosCobranzaPdf({
+  periodValue,
+  status,
+  search,
+  ids,
+}: {
+  periodValue: string;
+  status?: EstadoRecibo;
+  search?: string;
+  ids?: string[];
+}) {
+  const { user, session } = await requireSystemRole(READ_ROLES);
+  const period = receiptPeriodFromValue(periodValue);
+  const { receipts } = await listarCobranzaMensual({ period, status, search });
+  const selectedIds = ids ? new Set(ids.map((id) => recordIdSchema.parse(id))) : null;
+  const included = selectedIds ? receipts.filter((receipt) => selectedIds.has(receipt.id)) : receipts;
+  if (included.length === 0) throw new DomainError("NOT_FOUND", "No hay recibos para imprimir con los criterios seleccionados.");
+
+  const issuer = user.perfil?.razonSocial || user.perfil?.nombreCompleto || session.user.name || "Administración de rentas";
+  const pages = included.map((receipt) => {
+    const total = calculateReceiptTotal({ rent: Number(receipt.monto) });
+    return {
+      issuer,
+      owner: receipt.contrato.unidad.propietario.nombre,
+      tenant: receipt.contrato.arrendatario,
+      total: formatCurrency(total),
+      totalInWords: amountInWords(total),
+      property: receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim(),
+      unit: receipt.contrato.unidad.identificador,
+      rentalPeriod: formatRentalPeriod(receipt.periodo, receipt.periodoFin),
+      issuedAt: formatLetterDate(new Date()),
+    };
+  });
+  return renderToBuffer(<Document title="Recibos de cobranza" author={issuer}>{pages.map((data, index) => <ReceiptPage data={data} key={`${included[index].id}-${index}`} />)}</Document>);
 }
 
 function amountInWords(value: number) {

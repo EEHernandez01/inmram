@@ -1,6 +1,7 @@
 import { EstadoRecibo } from "@/generated/prisma/enums";
 import Link from "next/link";
 import { ReceiptMobileCard } from "@/components/collection/receipt-mobile-card";
+import { ReceiptPrintControls } from "@/components/collection/receipt-print-controls";
 import { receiptStatusLabels } from "@/components/collection/receipt-badge";
 import { ReceiptTable } from "@/components/collection/receipt-table";
 import { Alert } from "@/components/ui/alert";
@@ -85,11 +86,16 @@ export default async function CollectionPage({
     <>
       <PageHeader
         action={
-          canWrite ? (
-            <form action="/api/cobranza/generar" method="post">
-              <Button type="submit">Generar/actualizar cobranza</Button>
-            </form>
-          ) : null
+          <div className="flex flex-wrap gap-2">
+            <Link className="inline-flex min-h-11 items-center justify-center rounded-card border border-border bg-surface px-4 py-2.5 text-sm font-bold text-ink transition-colors hover:bg-bg" href="/reportes/pagos">
+              Historial de pagos
+            </Link>
+            {canWrite ? (
+              <form action="/api/cobranza/generar" method="post">
+                <Button type="submit">Generar/actualizar cobranza</Button>
+              </form>
+            ) : null}
+          </div>
         }
         description="Seguimiento mensual de recibos, pagos y morosidad."
         eyebrow="Operación"
@@ -201,12 +207,24 @@ export default async function CollectionPage({
       </section>
 
       <section className="mt-7">
-        <div className="mb-4 flex items-baseline justify-between gap-4">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
           <div>
             <h2 className="text-lg font-bold tracking-tight text-ink">{status ? receiptStatusLabels[status] : "Todos los recibos"}</h2>
             <p className="mt-1 text-sm text-ink-secondary">{pagination?.total ?? receipts.length} {(pagination?.total ?? receipts.length) === 1 ? "recibo" : "recibos"} en esta vista</p>
           </div>
-          {status ? <Link className="text-sm font-semibold text-brand hover:text-brand-hover" href={collectionUrl()}>Ver todos</Link> : null}
+          <div className="flex flex-wrap items-center gap-3">
+            {status ? <Link className="text-sm font-semibold text-brand hover:text-brand-hover" href={collectionUrl()}>Ver todos</Link> : null}
+            {(pagination?.total ?? receipts.length) > 0 ? <ReceiptPrintControls
+              periodValue={periodValue}
+              receipts={receipts.map((receipt) => ({
+                id: receipt.id,
+                label: `${receipt.contrato.unidad.propiedad.direccion} · Unidad ${receipt.contrato.unidad.identificador} — ${receipt.contrato.arrendatario}`,
+              }))}
+              search={search}
+              status={status}
+              total={pagination?.total ?? receipts.length}
+            /> : null}
+          </div>
         </div>
         {receipts.length === 0 ? (
           <EmptyState
