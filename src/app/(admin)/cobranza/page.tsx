@@ -214,7 +214,7 @@ export default async function CollectionPage({
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {status ? <Link className="text-sm font-semibold text-brand hover:text-brand-hover" href={collectionUrl()}>Ver todos</Link> : null}
-            {(pagination?.total ?? receipts.length) > 0 ? <ReceiptPrintControls
+            <ReceiptPrintControls
               periodValue={periodValue}
               receipts={receipts.map((receipt) => ({
                 id: receipt.id,
@@ -223,7 +223,7 @@ export default async function CollectionPage({
               search={search}
               status={status}
               total={pagination?.total ?? receipts.length}
-            /> : null}
+            />
           </div>
         </div>
         {receipts.length === 0 ? (
