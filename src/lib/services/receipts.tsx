@@ -21,6 +21,7 @@ export async function generarReciboPdf(receiptId: string) {
   const issuer = user.perfil?.razonSocial || user.perfil?.nombreCompleto || session.user.name || "Administración de rentas";
   const data = {
     issuer,
+    folio: receipt.id.slice(0, 8).toUpperCase(),
     tenant: receipt.contrato.arrendatario,
     total: formatCurrency(total),
     totalInWords: amountInWords(total),
@@ -28,6 +29,7 @@ export async function generarReciboPdf(receiptId: string) {
     unit: receipt.contrato.unidad.identificador,
     rentalPeriod: formatRentalPeriod(receipt.periodo, receipt.periodoFin),
     issuedAt: formatLetterDate(new Date()),
+    dueDate: formatLongDate(receipt.fechaVencimiento),
   };
   return renderToBuffer(<ReceiptDocument data={data} />);
 }
@@ -67,6 +69,10 @@ function formatLetterDate(value: Date) {
   const day = String(value.getUTCDate()).padStart(2, "0");
   const monthName = new Intl.DateTimeFormat("es-MX", { month: "long", timeZone: "UTC" }).format(value);
   return `Ciudad de México ${day} de ${monthName} del ${value.getUTCFullYear()}`;
+}
+
+function formatLongDate(value: Date) {
+  return new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" }).format(value);
 }
 
 function formatReceiptPlaceAndDate(value: Date) {

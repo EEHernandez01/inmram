@@ -8,21 +8,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 1.45,
     paddingHorizontal: 66,
-    paddingTop: 120,
+    paddingTop: 72,
   },
-  date: { fontSize: 12, textAlign: "right" },
-  content: { flexGrow: 1, justifyContent: "center" },
-  paragraph: { fontSize: 13, lineHeight: 1.55, marginHorizontal: 42, textAlign: "justify" },
+  heading: { color: "#1E3A5F", fontFamily: "Helvetica-Bold", fontSize: 17, textAlign: "center" },
+  folio: { color: "#57534E", fontSize: 9, marginTop: 7, textAlign: "center" },
+  date: { marginTop: 40, textAlign: "right" },
+  paragraph: { fontSize: 13, lineHeight: 1.55, marginTop: 48, textAlign: "justify" },
   emphasis: { fontFamily: "Helvetica-Bold" },
-  signature: { marginHorizontal: 42, marginTop: 70, width: 250 },
-  salutation: { fontFamily: "Helvetica-Bold", fontSize: 11, letterSpacing: 3 },
-  signatureSpace: { height: 56 },
-  signer: { fontFamily: "Helvetica-Bold", fontSize: 12 },
-  signerRole: { fontFamily: "Helvetica-Bold", fontSize: 12, marginTop: 8 },
+  dueDate: { fontFamily: "Helvetica-Bold", marginTop: 20 },
+  closing: { marginTop: 20, textAlign: "justify" },
+  signature: { marginTop: 64, width: 250 },
+  signatureLine: { borderTopColor: "#1C1917", borderTopWidth: 1, paddingTop: 8, textAlign: "center" },
+  signerRole: { color: "#57534E", fontSize: 10, marginTop: 3, textAlign: "center" },
+  footer: { bottom: 38, color: "#57534E", fontSize: 8, left: 66, position: "absolute", right: 66, textAlign: "center" },
 });
 
 export type ReceiptPdfData = {
   issuer: string;
+  folio: string;
   tenant: string;
   total: string;
   totalInWords: string;
@@ -30,23 +33,25 @@ export type ReceiptPdfData = {
   unit: string;
   rentalPeriod: string;
   issuedAt: string;
+  dueDate: string;
 };
 
 export function ReceiptDocument({ data }: { data: ReceiptPdfData }) {
-  return <Document title="Recibo" author={data.issuer}>
+  return <Document title={`Solicitud de pago ${data.folio}`} author={data.issuer}>
     <Page size="LETTER" style={styles.page}>
+      <Text style={styles.heading}>SOLICITUD DE PAGO</Text>
+      <Text style={styles.folio}>Folio {data.folio}</Text>
       <Text style={styles.date}>{data.issuedAt}</Text>
-      <View style={styles.content}>
-        <Text style={styles.paragraph}>
-          Recibí del Sr. <Text style={styles.emphasis}>{data.tenant}</Text> la cantidad de <Text style={styles.emphasis}>{data.total}</Text> ({data.totalInWords}) por concepto de renta <Text style={styles.emphasis}>{data.rentalPeriod}</Text>, del departamento ubicado en <Text style={styles.emphasis}>{data.property}, departamento {data.unit}</Text>.
-        </Text>
-        <View style={styles.signature}>
-          <Text style={styles.salutation}>ATENTAMENTE</Text>
-          <View style={styles.signatureSpace} />
-          <Text style={styles.signer}>{data.issuer}</Text>
-          <Text style={styles.signerRole}>Apoderado Legal</Text>
-        </View>
+      <Text style={styles.paragraph}>
+        Por medio de la presente, solicitamos al Sr. <Text style={styles.emphasis}>{data.tenant}</Text> realizar el pago de <Text style={styles.emphasis}>{data.total}</Text> ({data.totalInWords}) por concepto de renta correspondiente al periodo <Text style={styles.emphasis}>{data.rentalPeriod}</Text>, del departamento ubicado en <Text style={styles.emphasis}>{data.property}, departamento {data.unit}</Text>.
+      </Text>
+      <Text style={styles.dueDate}>Fecha límite de pago: {data.dueDate}</Text>
+      <Text style={styles.closing}>Agradecemos realizar el pago a más tardar en la fecha indicada.</Text>
+      <View style={styles.signature}>
+        <Text style={styles.signatureLine}>{data.issuer}</Text>
+        <Text style={styles.signerRole}>Administración de rentas</Text>
       </View>
+      <Text style={styles.footer}>Solicitud administrativa de pago. No es CFDI ni comprobante fiscal.</Text>
     </Page>
   </Document>;
 }
