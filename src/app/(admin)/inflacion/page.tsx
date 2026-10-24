@@ -16,7 +16,7 @@ export default async function InflationPage({ searchParams }: { searchParams: Pr
   const selectedMonth = query.mes ?? new Date().toISOString().slice(0, 7);
 
   return <>
-    <PageHeader description="Consulta la fuente oficial, registra el nivel mensual y revisa el avance anual." eyebrow="Inflación y renovación" title="Índice Nacional de Precios" />
+    <PageHeader description="Registra el índice oficial y consulta cómo se aplican los ajustes anuales de renta." eyebrow="Ajustes anuales" title="Ajustes de renta" />
     {query.guardado ? <Alert className="mt-7" variant="success">Nivel INPC guardado correctamente.</Alert> : null}
     {query.error ? <Alert className="mt-7" variant="danger">{query.error}</Alert> : null}
 

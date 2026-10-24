@@ -16,21 +16,21 @@ const config: Config = {
     extend: {
       colors: {
         // Fondo y superficies
-        bg: "#FAFAF9",
+        bg: "#F3F6F9",
         surface: "#FFFFFF",
-        border: "#E7E5E4",
+        border: "#D5DEE7",
 
         // Texto
         ink: {
-          DEFAULT: "#1C1917",
-          secondary: "#78716C",
+          DEFAULT: "#172B3D",
+          secondary: "#526476",
         },
 
         // Marca / acento
         brand: {
-          DEFAULT: "#1E3A5F",
-          hover: "#17304D",
-          soft: "#E8EEF4",
+          DEFAULT: "#173A5E",
+          hover: "#102D4A",
+          soft: "#E6EEF5",
         },
 
         // Estatus funcionales (pagado / pendiente / vencido)

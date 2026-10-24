@@ -22,7 +22,7 @@ const groups: { label?: string; items: { href: string; label: string; icon: Icon
     label: "Análisis",
     items: [
       { href: "/reportes", label: "Rentabilidad", icon: "chart", roles: [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR, RolUsuario.PROPIETARIO, RolUsuario.SOLO_LECTURA] },
-      { href: "/inflacion", label: "Actualización de rentas", icon: "chart", roles: [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR] },
+      { href: "/inflacion", label: "Ajustes de renta", icon: "chart", roles: [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR] },
     ],
   },
   {
@@ -30,7 +30,7 @@ const groups: { label?: string; items: { href: string; label: string; icon: Icon
     items: [
       { href: "/configuracion/usuarios", label: "Usuarios", icon: "team", roles: [RolUsuario.ADMINISTRADOR] },
       { href: "/configuracion/propietarios", label: "Propietarios", icon: "team", roles: [RolUsuario.ADMINISTRADOR] },
-      { href: "/configuracion/auditoria", label: "Actividad", icon: "history", roles: [RolUsuario.ADMINISTRADOR] },
+      { href: "/configuracion/auditoria", label: "Historial de cambios", icon: "history", roles: [RolUsuario.ADMINISTRADOR] },
     ],
   },
 ];

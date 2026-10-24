@@ -109,7 +109,13 @@ export default async function DashboardPage() {
         title={`Hola, ${user.perfil?.nombreCompleto || session.user.name || session.user.email}`}
       />
 
-      <section className="mt-7 grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]">
+      <section className="mt-7 grid gap-5 xl:grid-cols-[minmax(360px,.95fr)_minmax(0,1.05fr)]">
+        <CollectionFollowUp
+          collectionHref={collectionHref}
+          currentDate={currentDate}
+          hasReceipts={collection.receipts.length > 0}
+          pendingPayments={pendingPayments}
+        />
         <article className="relative overflow-hidden rounded-card border border-brand/10 bg-brand p-6 text-white sm:p-8">
           <div aria-hidden="true" className="absolute -right-20 -top-20 h-56 w-56 rounded-full border border-white/10 bg-white/5" />
           <div aria-hidden="true" className="absolute -bottom-28 right-20 h-56 w-56 rounded-full bg-white/[.035]" />
@@ -150,14 +156,6 @@ export default async function DashboardPage() {
           </div>
         </article>
 
-        <div className="order-first xl:order-last">
-          <CollectionFollowUp
-            collectionHref={collectionHref}
-            currentDate={currentDate}
-            hasReceipts={collection.receipts.length > 0}
-            pendingPayments={pendingPayments}
-          />
-        </div>
       </section>
 
       <section aria-label="Indicadores del portafolio" className="mt-5 grid gap-4 sm:grid-cols-3">

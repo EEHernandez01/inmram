@@ -19,7 +19,7 @@ const globalForPrisma = globalThis as unknown as {
   prismaSchemaVersion?: string;
 };
 
-const prismaSchemaVersion = "20261013000200";
+const prismaSchemaVersion = "20261024000100";
 const sslRootCertificate = process.env.SUPABASE_DB_SSL_ROOT_CERT;
 
 function createPrismaClient() {

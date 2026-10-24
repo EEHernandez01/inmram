@@ -76,12 +76,25 @@ model UsuarioSistema {
   perfil         PerfilUsuario?
   propietario    Propietario?        @relation(fields: [propietarioId], references: [id], onDelete: Restrict)
   auditorias     RegistroAuditoria[]
+  borradoresAltaPropiedad BorradorAltaPropiedad[]
   pagosRegistrados PagoRecibo[] @relation("PagoRegistradoPor")
   pagosAnulados    PagoRecibo[] @relation("PagoAnuladoPor")
   creadoEn       DateTime            @default(now())
   actualizadoEn  DateTime            @updatedAt
 
   @@index([propietarioId])
+}
+
+model BorradorAltaPropiedad {
+  id               String         @id @default(uuid()) @db.Uuid
+  usuarioSistemaId String         @db.Uuid
+  nombre           String
+  contenido        Json
+  usuarioSistema   UsuarioSistema @relation(fields: [usuarioSistemaId], references: [id], onDelete: Cascade)
+  creadoEn         DateTime       @default(now())
+  actualizadoEn    DateTime       @updatedAt
+
+  @@index([usuarioSistemaId, actualizadoEn])
 }
 
 model PerfilUsuario {

@@ -17,9 +17,9 @@ const maxPhotoSize = 4 * 1024 * 1024;
 const allowedPhotoTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 const steps = [
-  ["Propiedad", "Ubicación y propietario"],
-  ["Valores y fotos", "Información financiera"],
-  ["Unidades", "Inventario y contratos"],
+  ["Ubicación", "Domicilio y responsable"],
+  ["Costos y fotos", "Valores del inmueble"],
+  ["Unidades", "Inventario y ocupación"],
   ["Revisar", "Confirmar el alta"],
 ] as const;
 
@@ -80,6 +80,14 @@ type UnitDraft = {
 };
 type Duplicate = { id: string; direccion: string; archivadaEn: string | null; unidades: number };
 type UploadedPhoto = { url: string; pathname: string; nombre: string; mimeType: string; tamanoBytes: number };
+type DraftSnapshot = {
+  step: number;
+  property: PropertyDraft;
+  propertyOwner: OwnerReference;
+  units: UnitDraft[];
+  existingProperty: Duplicate | null;
+};
+type SavedDraft = { id: string; nombre: string; contenido: DraftSnapshot; actualizadoEn: string };
 
 const emptyOwner = (): OwnerDraft => ({ nombre: "", telefono: "", correo: "" });
 const emptyContract = (): ContractDraft => ({
@@ -225,6 +233,25 @@ export function PropertyOnboardingWizard({ owners, placesEnabled }: { owners: Ow
   const [photoCount, setPhotoCount] = useState(0);
   const [message, setMessage] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [savedDrafts, setSavedDrafts] = useState<SavedDraft[]>([]);
+  const [draftsLoaded, setDraftsLoaded] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftMessage, setDraftMessage] = useState<string>();
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/propiedades/borradores")
+      .then(async (response) => {
+        if (!response.ok) return [];
+        const payload = await response.json() as { borradores?: SavedDraft[] };
+        return payload.borradores ?? [];
+      })
+      .then((borradores) => { if (active) setSavedDrafts(borradores); })
+      .catch(() => { if (active) setSavedDrafts([]); })
+      .finally(() => { if (active) setDraftsLoaded(true); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     const address = property.direccion.trim();
@@ -348,6 +375,69 @@ export function PropertyOnboardingWizard({ owners, placesEnabled }: { owners: Ow
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function draftSnapshot(): DraftSnapshot {
+    return { step, property, propertyOwner, units, existingProperty };
+  }
+
+  function resumeDraft(draft: SavedDraft) {
+    const snapshot = draft.contenido;
+    if (!snapshot?.property || !Array.isArray(snapshot.units)) {
+      setDraftMessage("Este borrador no se puede abrir. Puedes eliminarlo y empezar de nuevo.");
+      return;
+    }
+    setProperty(snapshot.property);
+    setPropertyOwner(snapshot.propertyOwner ?? { modo: "EXISTENTE", propietarioId: "" });
+    setUnits(snapshot.units);
+    setExistingProperty(snapshot.existingProperty ?? null);
+    setStep(Math.max(0, Math.min(3, Number(snapshot.step) || 0)));
+    setDraftId(draft.id);
+    setDraftMessage(`Borrador de “${draft.nombre}” retomado. Tendrás que volver a seleccionar las fotos.`);
+    setMessage(undefined);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function saveDraft() {
+    setSavingDraft(true);
+    setDraftMessage(undefined);
+    try {
+      const response = await fetch("/api/propiedades/borradores", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(draftId ? { id: draftId } : {}),
+          nombre: property.direccion.trim() || "Propiedad sin dirección",
+          contenido: draftSnapshot(),
+        }),
+      });
+      const payload = await response.json().catch(() => ({})) as { id?: string; error?: string };
+      if (!response.ok || !payload.id) throw new Error(payload.error ?? "No se pudo guardar el borrador.");
+      setDraftId(payload.id);
+      setDraftMessage("Borrador guardado. Puedes salir y retomarlo después desde esta pantalla.");
+      const draftsResponse = await fetch("/api/propiedades/borradores");
+      if (draftsResponse.ok) {
+        const draftsPayload = await draftsResponse.json() as { borradores?: SavedDraft[] };
+        setSavedDrafts(draftsPayload.borradores ?? []);
+      }
+    } catch (error) {
+      setDraftMessage(error instanceof Error ? error.message : "No se pudo guardar el borrador.");
+    } finally {
+      setSavingDraft(false);
+    }
+  }
+
+  async function deleteDraft(id: string) {
+    if (!window.confirm("¿Eliminar este borrador guardado? Esta acción no se puede deshacer.")) return;
+    try {
+      const response = await fetch(`/api/propiedades/borradores?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("No se pudo eliminar el borrador.");
+      setSavedDrafts((current) => current.filter((draft) => draft.id !== id));
+      if (draftId === id) setDraftId(null);
+      setDraftMessage("Borrador eliminado.");
+    } catch (error) {
+      setDraftMessage(error instanceof Error ? error.message : "No se pudo eliminar el borrador.");
+    }
+  }
+
   async function submit() {
     for (const targetStep of [0, 1, 2]) {
       const error = validationForStep(targetStep);
@@ -409,6 +499,8 @@ export function PropertyOnboardingWizard({ owners, placesEnabled }: { owners: Ow
         return;
       }
 
+      if (draftId) await fetch(`/api/propiedades/borradores?id=${encodeURIComponent(draftId)}`, { method: "DELETE" });
+
       const warning = uploadFailed ? "La propiedad se guardó, pero una o más fotos no pudieron cargarse. Inténtalo nuevamente desde Editar propiedad." : "";
       router.push(`/propiedades/${payload.propiedadId}${warning ? `?aviso=${encodeURIComponent(warning)}` : ""}`);
     } catch (error) {
@@ -420,20 +512,32 @@ export function PropertyOnboardingWizard({ owners, placesEnabled }: { owners: Ow
 
   function confirmCancel(event: React.MouseEvent<HTMLAnchorElement>) {
     const hasWork = property.direccion.trim() || units.length > 0 || propertyOwner.modo === "NUEVO" || (propertyOwner.modo === "EXISTENTE" && propertyOwner.propietarioId);
-    if (hasWork && !window.confirm("Se descartarán los datos capturados. ¿Deseas cancelar el asistente?")) event.preventDefault();
+    if (hasWork && !window.confirm(draftId ? "Los cambios posteriores al último borrador guardado se perderán. ¿Deseas salir?" : "Se descartarán los datos capturados. ¿Deseas cancelar el asistente?")) event.preventDefault();
   }
 
   return <form className="space-y-6" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
+    {draftsLoaded && savedDrafts.some((draft) => draft.id !== draftId) ? <details className="rounded-card border border-border bg-surface p-4 shadow-sm">
+      <summary className="cursor-pointer list-none font-semibold text-ink marker:hidden">Retomar un borrador guardado <span className="ml-1 rounded-pill bg-brand-soft px-2 py-0.5 text-xs font-bold text-brand">{savedDrafts.filter((draft) => draft.id !== draftId).length}</span></summary>
+      <ul className="mt-4 divide-y divide-border">
+        {savedDrafts.filter((draft) => draft.id !== draftId).map((draft) => <li className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0" key={draft.id}>
+          <div><p className="font-semibold text-ink">{draft.nombre}</p><p className="mt-1 text-xs text-ink-secondary">Guardado {new Date(draft.actualizadoEn).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })} · Las fotos se agregan al finalizar.</p></div>
+          <div className="flex gap-2"><Button onClick={() => resumeDraft(draft)} type="button" variant="secondary">Continuar</Button><Button onClick={() => void deleteDraft(draft.id)} type="button" variant="secondary">Eliminar</Button></div>
+        </li>)}
+      </ul>
+    </details> : null}
+
+    {draftMessage ? <Alert variant={draftMessage.startsWith("Borrador guardado") || draftMessage.startsWith("Borrador de") || draftMessage === "Borrador eliminado." ? "success" : "info"}>{draftMessage}</Alert> : null}
+
     <ol aria-label="Progreso del asistente" className="grid gap-3 sm:grid-cols-4">
-      {steps.map(([title, description], index) => <li key={title}><button className={`w-full rounded-xl border p-3 text-left transition ${index === step ? "border-brand bg-brand-soft text-ink" : index < step ? "border-success/40 bg-success-soft/40 text-ink" : "border-border bg-bg text-ink-secondary"}`} disabled={index > step || submitting || Boolean(existingProperty && index === 1)} onClick={() => goTo(index)} type="button"><span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide"><span className={`flex h-6 w-6 items-center justify-center rounded-full ${index <= step ? "bg-brand text-white" : "bg-surface text-ink-secondary"}`}>{index < step ? "✓" : index + 1}</span>{title}</span><span className="mt-1 block text-xs font-normal">{existingProperty && index === 1 ? "Se conservan los datos existentes" : description}</span></button></li>)}
+      {steps.map(([title, description], index) => <li key={title}><button aria-current={index === step ? "step" : undefined} className={`w-full rounded-card border p-3 text-left transition-colors ${index === step ? "border-brand bg-brand-soft text-ink shadow-sm" : index < step ? "border-success/40 bg-success-soft/40 text-ink" : "border-border bg-surface text-ink-secondary hover:border-brand/40"}`} disabled={index > step || submitting || Boolean(existingProperty && index === 1)} onClick={() => goTo(index)} type="button"><span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide"><span className={`flex h-6 w-6 items-center justify-center rounded-full ${index <= step ? "bg-brand text-white" : "border border-border bg-surface text-ink-secondary"}`}>{index < step ? "✓" : index + 1}</span>{title}</span><span className="mt-1 block text-xs font-normal">{existingProperty && index === 1 ? "Se conservan los datos existentes" : description}</span></button></li>)}
     </ol>
 
     {message ? <Alert variant="danger">{message}</Alert> : null}
 
-    {step === 0 ? <section className="space-y-6 rounded-xl border border-border p-4 sm:p-5">
-      <div><h2 className="font-serif text-xl font-semibold text-ink">¿De quién y dónde es el inmueble?</h2><p className="mt-1 text-sm text-ink-secondary">Comienza con la ubicación y el responsable principal de la propiedad.</p></div>
-      {existingProperty ? <Alert variant="info">Se agregarán las unidades a la ficha seleccionada, conservando su propietario, valores y fotos.</Alert> : <OwnerSelector label="Propietario del inmueble" onChange={setPropertyOwner} owners={owners} value={propertyOwner} />}
+    {step === 0 ? <section className="space-y-6 rounded-card border border-border bg-surface p-4 shadow-sm sm:p-6">
+      <div><h2 className="font-serif text-xl font-semibold text-ink">Ubicación y responsable</h2><p className="mt-1 text-sm leading-6 text-ink-secondary">Indica la dirección del inmueble y quién es su propietario principal.</p></div>
       <div className="border-t border-border pt-6"><LocationPicker defaults={{ address: property.direccion, googlePlaceId: property.googlePlaceId ?? undefined, latitude: property.latitud ?? undefined, longitude: property.longitud ?? undefined }} enabled={placesEnabled} onLocationChange={(location) => { setExistingProperty(null); setProperty((current) => ({ ...current, direccion: location.direccion, googlePlaceId: location.googlePlaceId, latitud: location.latitud, longitud: location.longitud, confirmarDuplicado: false })); }} /></div>
+      {existingProperty ? <Alert variant="info">Se agregarán las unidades a la ficha seleccionada, conservando su propietario, valores y fotos.</Alert> : <OwnerSelector label="Propietario del inmueble" onChange={setPropertyOwner} owners={owners} value={propertyOwner} />}
       {duplicates.length > 0 ? <Alert variant="warning">
         <p className="font-semibold">Ya hay {duplicates.length === 1 ? "una propiedad" : "propiedades"} con esta dirección o ubicación.</p>
         <p className="mt-2">Si son unidades del mismo inmueble, selecciona su ficha para agregarlas aquí.</p>
@@ -449,14 +553,14 @@ export function PropertyOnboardingWizard({ owners, placesEnabled }: { owners: Ow
     </section> : null}
 
     <fieldset disabled={Boolean(existingProperty) || step !== 1} aria-hidden={step !== 1} className={step === 1 ? "" : "hidden"}>
-    <section className="space-y-6 rounded-xl border border-border p-4 sm:p-5">
-      <div><h2 className="font-serif text-xl font-semibold text-ink">Valores y fotos</h2><p className="mt-1 text-sm text-ink-secondary">Los importes corresponden al predio completo y se capturan en pesos mexicanos.</p></div>
+    <section className="space-y-6 rounded-card border border-border bg-surface p-4 shadow-sm sm:p-6">
+      <div><h2 className="font-serif text-xl font-semibold text-ink">Costos y fotos</h2><p className="mt-1 text-sm leading-6 text-ink-secondary">Los valores y gastos corresponden a todo el inmueble. Captura los importes en pesos mexicanos.</p></div>
       <div className="grid gap-5 sm:grid-cols-2"><Field hint="Valor registrado para fines fiscales." label="Valor catastral"><MoneyInput defaultValue={property.valorCatastral} name="valorCatastral" onChange={(event) => updateProperty("valorCatastral", event.currentTarget.value)} required /></Field><Field hint="Valor estimado total del inmueble." label="Valor comercial total"><MoneyInput defaultValue={property.valorComercialTotal} name="valorComercialTotal" onChange={(event) => updateProperty("valorComercialTotal", event.currentTarget.value)} required /></Field><Field hint="Pago total estimado por año." label="Predial anual"><MoneyInput defaultValue={property.predialAnual} name="predialAnual" onChange={(event) => updateProperty("predialAnual", event.currentTarget.value)} required /></Field><Field hint="Cuotas y servicios comunes por año." label="Mantenimiento anual"><MoneyInput defaultValue={property.mantenimientoAnual} name="mantenimientoAnual" onChange={(event) => updateProperty("mantenimientoAnual", event.currentTarget.value)} required /></Field></div>
-      <div className="border-t border-border pt-6"><h3 className="font-serif text-lg font-semibold text-ink">Fotos</h3><p className="mt-1 text-sm text-ink-secondary">Este paso es opcional; puedes agregar hasta 8 imágenes.</p><div className="mt-4"><PropertyPhotoInput inputRef={photoInputRef} onFilesChange={(files) => setPhotoCount(files.length)} /></div></div>
+      <div className="border-t border-border pt-6"><h3 className="font-serif text-lg font-semibold text-ink">Fotos</h3><p className="mt-1 text-sm text-ink-secondary">Opcional · Puedes agregar hasta 8 imágenes. Las fotos se cargan al crear la propiedad y no se incluyen en los borradores.</p><div className="mt-4"><PropertyPhotoInput inputRef={photoInputRef} onFilesChange={(files) => setPhotoCount(files.length)} /></div></div>
     </section>
     </fieldset>
 
-    {step === 2 ? <section className="space-y-5 rounded-xl border border-border p-4 sm:p-5">
+    {step === 2 ? <section className="space-y-5 rounded-card border border-border bg-surface p-4 shadow-sm sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="font-serif text-xl font-semibold text-ink">Unidades y contratos</h2><p className="mt-1 max-w-2xl text-sm text-ink-secondary">{existingProperty ? "Agrega las nuevas unidades de la propiedad seleccionada. Cada una puede tener su propio dueño y contrato." : "Puedes dejar el predio sin unidades, agregar varias, y elegir cuáles se ocupan desde ahora con un contrato activo."}</p></div><Button onClick={() => setUnits((current) => [...current, emptyUnit()])}>Agregar unidad</Button></div>
       {units.length === 0 ? <div className="rounded-xl border border-dashed border-border bg-bg/50 p-5 text-sm text-ink-secondary">{existingProperty ? "Agrega al menos una unidad para continuar." : "Aún no has agregado unidades. Puedes continuar para registrar únicamente el predio."}</div> : <div className="space-y-5">{units.map((unit, index) => <article className="rounded-xl border border-border bg-bg/40 p-4 sm:p-5" key={unit.id}><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-brand">Unidad {index + 1}</p><h3 className="mt-1 font-serif text-lg font-semibold text-ink">{unit.identificador || "Sin identificador"}</h3></div><Button onClick={() => setUnits((current) => current.filter((candidate) => candidate.id !== unit.id))} variant="secondary">Quitar unidad</Button></div>
         <div className="mt-5"><OwnerSelector label="Propietario de la unidad" onChange={(owner) => updateUnit(unit.id, (current) => ({ ...current, propietario: owner }))} owners={owners} value={unit.propietario} /></div>
@@ -468,9 +572,9 @@ export function PropertyOnboardingWizard({ owners, placesEnabled }: { owners: Ow
       </article>)}</div>}
     </section> : null}
 
-    {step === 3 ? <section className="space-y-6 rounded-xl border border-border p-4 sm:p-5"><div><h2 className="font-serif text-xl font-semibold text-ink">Revisa antes de crear</h2><p className="mt-1 text-sm text-ink-secondary">Puedes volver a cualquier paso para corregir los datos. Al confirmar se crearán todos los registros juntos.</p></div><div className="grid gap-4 lg:grid-cols-2"><ReviewCard action={() => goTo(0)} title="Propiedad"><p>{existingProperty?.direccion ?? (property.direccion || "Sin dirección")}</p><p className="mt-1 text-sm text-ink-secondary">{existingProperty ? `Se agregarán ${units.length} unidades a las ${existingProperty.unidades} existentes.` : `Propietario: ${ownerName(propertyOwner, owners)}`}</p></ReviewCard>{!existingProperty ? <ReviewCard action={() => goTo(1)} title="Valores y fotos"><p>Valor comercial: {property.valorComercialTotal}</p><p className="mt-1 text-sm text-ink-secondary">Predial: {property.predialAnual} · Mantenimiento: {property.mantenimientoAnual}</p><p className="mt-1 text-sm text-ink-secondary">{photoCount} fotos seleccionadas</p></ReviewCard> : null}<ReviewCard action={() => goTo(2)} title="Unidades"><p>{units.length === 0 ? "Predio sin unidades iniciales" : `${units.length} ${units.length === 1 ? "unidad" : "unidades"}`}</p>{units.map((unit) => <p className="mt-1 text-sm text-ink-secondary" key={unit.id}>{unit.identificador} · {unit.contrato ? "Contrato activo" : "Disponible"} · {ownerName(unit.propietario, owners)}</p>)}</ReviewCard></div><Alert variant="info">{existingProperty ? "Al confirmar, las nuevas unidades, sus propietarios, contratos y recibos aplicables se agregarán a la ficha seleccionada en una sola operación. Se conservarán los datos y unidades existentes." : "Al confirmar, el predio, propietarios nuevos, unidades, contratos y recibos aplicables se guardarán en una sola operación."}</Alert></section> : null}
+    {step === 3 ? <section className="space-y-6 rounded-card border border-border bg-surface p-4 shadow-sm sm:p-6"><div><h2 className="font-serif text-xl font-semibold text-ink">Revisa antes de crear</h2><p className="mt-1 text-sm leading-6 text-ink-secondary">Comprueba los datos y vuelve a cualquier paso si necesitas corregirlos. Los cambios se guardan juntos al confirmar.</p></div><div className="grid gap-4 lg:grid-cols-2"><ReviewCard action={() => goTo(0)} title="Ubicación y responsable"><p>{existingProperty?.direccion ?? (property.direccion || "Sin dirección")}</p><p className="mt-1 text-sm text-ink-secondary">{existingProperty ? `Se agregarán ${units.length} unidades a las ${existingProperty.unidades} existentes.` : `Propietario: ${ownerName(propertyOwner, owners)}`}</p></ReviewCard>{!existingProperty ? <ReviewCard action={() => goTo(1)} title="Costos y fotos"><p>Valor comercial: {property.valorComercialTotal}</p><p className="mt-1 text-sm text-ink-secondary">Predial: {property.predialAnual} · Mantenimiento: {property.mantenimientoAnual}</p><p className="mt-1 text-sm text-ink-secondary">{photoCount} fotos seleccionadas</p></ReviewCard> : null}<ReviewCard action={() => goTo(2)} title="Unidades"><p>{units.length === 0 ? "Inmueble sin unidades iniciales" : `${units.length} ${units.length === 1 ? "unidad" : "unidades"}`}</p>{units.map((unit) => <p className="mt-1 text-sm text-ink-secondary" key={unit.id}>{unit.identificador || "Sin identificador"} · {unit.tipo || "Tipo pendiente"} · {unit.metrosCuadrados || "—"} m² · {unit.contrato ? `Ocupada · renta ${unit.contrato.rentaMensualBase || "pendiente"} al mes · paga el día ${unit.contrato.diaPago || "—"}` : "Disponible"} · {ownerName(unit.propietario, owners)}</p>)}</ReviewCard></div><Alert variant="info">{existingProperty ? "Al confirmar, las nuevas unidades, sus propietarios, contratos y recibos aplicables se agregarán a la ficha seleccionada en una sola operación. Se conservarán los datos y unidades existentes." : "Al confirmar, el inmueble, propietarios nuevos, unidades, contratos y recibos aplicables se guardarán en una sola operación."}</Alert></section> : null}
 
-    <div className="sticky bottom-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface/95 p-3 shadow-lg backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none"><Link className="px-2 py-2 text-sm font-semibold text-ink-secondary hover:text-ink" href="/propiedades" onClick={confirmCancel}>Cancelar</Link><div className="flex gap-3">{step > 0 ? <Button onClick={() => goTo(step - 1)} variant="secondary">Anterior</Button> : null}{step < steps.length - 1 ? <Button disabled={checkingDuplicates} onClick={() => goTo(step + 1)}>Siguiente</Button> : <Button disabled={submitting} type="submit">{submitting ? "Guardando registros…" : existingProperty ? "Confirmar y agregar unidades" : "Confirmar y crear propiedad"}</Button>}</div></div>
+    <div className="sticky bottom-3 flex flex-wrap items-center justify-between gap-3 rounded-card border border-border bg-surface/95 p-3 shadow-lg backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none"><Link className="px-2 py-2 text-sm font-semibold text-ink-secondary hover:text-ink" href="/propiedades" onClick={confirmCancel}>Cancelar</Link><div className="flex flex-wrap gap-2">{draftId ? <Button disabled={savingDraft || submitting} onClick={() => void deleteDraft(draftId)} type="button" variant="danger">Eliminar borrador</Button> : null}<Button disabled={savingDraft || submitting} onClick={() => void saveDraft()} type="button" variant="secondary">{savingDraft ? "Guardando borrador…" : "Guardar borrador"}</Button>{step > 0 ? <Button onClick={() => goTo(step - 1)} type="button" variant="secondary">Anterior</Button> : null}{step < steps.length - 1 ? <Button disabled={checkingDuplicates || submitting} onClick={() => goTo(step + 1)} type="button">Siguiente</Button> : <Button disabled={submitting || savingDraft} type="submit">{submitting ? "Guardando registros…" : existingProperty ? "Confirmar y agregar unidades" : "Confirmar y crear propiedad"}</Button>}</div></div>
   </form>;
 }
 
