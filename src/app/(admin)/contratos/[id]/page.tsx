@@ -10,7 +10,7 @@ import { getSystemUser, WRITE_ROLES } from "@/lib/auth/authorization";
 import { calculateReceiptPaymentBalance, calculateReceiptTotal, currentCollectionDate } from "@/lib/calculations/collection";
 import { formatCurrency, formatDate, formatPercent, formatReceiptPeriodRange } from "@/lib/format";
 import { obtenerContrato } from "@/lib/services/foundation";
-import { obtenerEstadoPropuestaRenovacion } from "@/lib/services/inflation";
+import { obtenerEstadoAvisoAumentoRenta, obtenerEstadoPropuestaRenovacion } from "@/lib/services/inflation";
 
 const contractState = {
   ACTIVO: { label: "Activo", className: "bg-brand-soft text-brand" },
@@ -21,7 +21,7 @@ const contractState = {
 export default async function ContractDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ cancelado?: string; renovado?: string; error?: string }> }) {
   const { id } = await params;
   const query = await searchParams;
-  const [{ user }, contract, renewalProposal] = await Promise.all([getSystemUser(), obtenerContrato(id), obtenerEstadoPropuestaRenovacion(id)]);
+  const [{ user }, contract, renewalProposal, rentNotice] = await Promise.all([getSystemUser(), obtenerContrato(id), obtenerEstadoPropuestaRenovacion(id), obtenerEstadoAvisoAumentoRenta(id)]);
   if (!contract) notFound();
 
   const canWrite = WRITE_ROLES.includes(user.rol as (typeof WRITE_ROLES)[number]) && !contract.unidad.propiedad.archivadaEn;
@@ -60,6 +60,8 @@ export default async function ContractDetailPage({ params, searchParams }: { par
     {query.cancelado ? <Alert className="mt-7" variant="success">Contrato cancelado correctamente. Los recibos y pagos ya emitidos se conservaron.</Alert> : null}
     {query.renovado ? <Alert className="mt-7" variant="success">Contrato renovado y ajuste INPC registrado.</Alert> : null}
     {query.error ? <Alert className="mt-7" variant="danger">{query.error}</Alert> : null}
+
+    {canEdit ? <section className="mt-8 rounded-3xl bg-bg p-6 shadow-[7px_7px_15px_#c6cdd6,-7px_-7px_15px_#fff]"><p className="text-[10px] font-bold uppercase tracking-[.13em] text-brand/70">Aviso para el arrendatario</p><div className="mt-1 flex flex-wrap items-end justify-between gap-4"><div><h2 className="font-serif text-xl font-semibold text-ink">Aviso anual de aumento de renta</h2>{rentNotice.estado === "PENDIENTE_INFLACION" ? <p className="mt-2 text-sm text-warning">Aún no hay un dato anual de inflación de Banxico para generar el aviso.</p> : rentNotice.estado === "FUERA_DE_VIGENCIA" ? <p className="mt-2 text-sm text-ink-secondary">El contrato no estará vigente el {formatDate(rentNotice.effectiveDate)}.</p> : <><p className="mt-2 text-sm text-ink-secondary">Vigencia desde el {formatDate(rentNotice.effectiveDate)} · Nueva renta mensual: <span className="font-semibold text-ink">{formatCurrency(rentNotice.rent)}</span>.</p><p className="mt-1 text-xs text-ink-secondary">Cálculo interno con inflación anual Banxico de {formatDate(rentNotice.annualMonth)} ({formatPercent(rentNotice.inflation * 100)}). Fecha límite para entregar el aviso: {formatDate(rentNotice.deliveryDeadline)}.</p></>}</div>{rentNotice.estado === "LISTO" ? <a className="cursor-pointer rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-hover" href={`/api/contratos/${id}/aviso-aumento`} target="_blank">Vista previa del aviso PDF</a> : null}</div></section> : null}
 
     <section className="mt-7 rounded-3xl bg-brand p-6 text-white shadow-[7px_7px_15px_#c6cdd6,-7px_-7px_15px_#fff]"><div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[.13em] text-white/65">Estado de cuenta</p><p className="mt-2 font-serif text-3xl font-semibold">{unpaidReceipts.length ? `${unpaidReceipts.length} pago${unpaidReceipts.length === 1 ? " pendiente" : "s pendientes"}` : "Pagos al corriente"}</p><p className="mt-2 text-sm text-white/75">{contract.estado === "CANCELADO" ? `Cancelado el ${formatDate(contract.canceladoEn!)}` : `Vence el ${formatDate(contract.fechaFin)} · ${daysRemaining} días restantes de vigencia`}</p></div><div className="flex flex-wrap gap-3"><Link className="cursor-pointer rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-brand hover:bg-white/90" href="/cobranza">Gestionar pagos</Link><Link className="cursor-pointer rounded-xl border border-white/35 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10" href={`/propiedades/${contract.unidad.propiedadId}/unidades/${contract.unidadId}`}>Ver unidad</Link></div></div></section>
 

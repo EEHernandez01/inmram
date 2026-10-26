@@ -9,7 +9,8 @@ export function calculateRenewedRent(currentRent: number, accumulatedInflation: 
   if (!Number.isFinite(currentRent) || currentRent <= 0 || !Number.isFinite(accumulatedInflation)) {
     throw new RangeError("La renta y la inflación deben ser válidas.");
   }
-  return Math.round(currentRent * (1 + accumulatedInflation) * 100) / 100;
+  const rentBeforeRounding = currentRent * (1 + accumulatedInflation);
+  return Math.ceil(rentBeforeRounding / 100) * 100;
 }
 
 export function contractExpirationAlertDays(endDate: Date, currentDate: Date) {

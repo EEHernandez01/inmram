@@ -11,9 +11,10 @@ import { prisma } from "@/lib/db/prisma";
 import { DomainError } from "@/lib/domain/errors";
 import { recordIdSchema } from "@/lib/validation/foundation";
 import { registrarAuditoria } from "@/lib/services/audit";
-import { obtenerSugerenciaInpc } from "@/lib/services/banxico";
+import { obtenerInflacionHistoricaBanxico, obtenerSugerenciaInpc } from "@/lib/services/banxico";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/format";
 import { RenewalProposalDocument } from "@/lib/pdf/renewal-proposal-document";
+import { RentIncreaseNoticeDocument } from "@/lib/pdf/rent-increase-notice-document";
 import { inflationDate, inflationIndexInputSchema, inflationMonthDate, inflationYearSchema, renewalInputSchema } from "@/lib/validation/inflation";
 
 export async function guardarIndiceInflacion(input: unknown) {
@@ -44,6 +45,34 @@ export async function sincronizarIndiceInpcBanxico() {
   return { estado: "actualizado", mes: suggestion.month };
 }
 
+export async function sincronizarInflacionMensualAnualBanxico(now = currentCollectionDate()) {
+  const year = now.getUTCFullYear();
+  const firstYear = Math.max(1969, year - 9);
+  const history = await obtenerInflacionHistoricaBanxico(firstYear, year);
+  if (!history) {
+    return { estado: process.env.BANXICO_SIE_TOKEN?.trim() ? "dato_no_disponible" : "token_no_configurado", registros: 0 };
+  }
+
+  const records = [
+    ...history.monthly.map((item) => ({ indice: "INFLACION_MENSUAL", item })),
+    ...history.annual.map((item) => ({ indice: "INFLACION_ANUAL", item })),
+  ];
+  if (!records.length) return { estado: "sin_datos", registros: 0 };
+
+  for (let offset = 0; offset < records.length; offset += 24) {
+    const batch = records.slice(offset, offset + 24);
+    await prisma.$transaction(batch.map(({ indice, item }) => {
+      const mes = inflationMonthDate(item.month);
+      return prisma.indiceInflacion.upsert({
+        where: { indice_mes: { indice, mes } },
+        create: { indice, mes, valor: item.percent.toFixed(4), fechaCorte: inflationDate(item.month + "-10") },
+        update: { valor: item.percent.toFixed(4), fechaCorte: inflationDate(item.month + "-10") },
+      });
+    }));
+  }
+  return { estado: "actualizado", registros: records.length, anios: [firstYear, year] };
+}
+
 export async function obtenerReporteInflacion(anioInput: unknown, indice = "INPC") {
   await requireSystemRole(WRITE_ROLES);
   const anio = inflationYearSchema.parse(anioInput);
@@ -59,7 +88,7 @@ export async function obtenerReporteInflacion(anioInput: unknown, indice = "INPC
 
 export async function listarIndicesInflacion(indice = "INPC") {
   await requireSystemRole(WRITE_ROLES);
-  return prisma.indiceInflacion.findMany({ where: { indice }, orderBy: { mes: "desc" }, take: 36 });
+  return prisma.indiceInflacion.findMany({ where: { indice }, orderBy: { mes: "desc" }, take: 120 });
 }
 
 export async function listarAlertasRenovacion() {
@@ -154,6 +183,60 @@ export async function obtenerEstadoPropuestaRenovacion(contratoId: string) {
   const calculation = proposalCalculation(contract, await latestAnnualInpc());
   if (!calculation) return { estado: "PENDIENTE_INPC" as const };
   return { estado: contract.renovacionNotificadaEn ? "LISTA" as const : "PENDIENTE_PREPARACION" as const, preparadaEn: contract.renovacionNotificadaEn, ...calculation };
+}
+
+function nextAnnualEffectiveDate(now = currentCollectionDate()) {
+  return new Date(Date.UTC(now.getUTCFullYear() + 1, 0, 1));
+}
+
+async function latestOfficialAnnualInflation() {
+  return prisma.indiceInflacion.findFirst({ where: { indice: "INFLACION_ANUAL" }, orderBy: { mes: "desc" } });
+}
+
+export async function obtenerEstadoAvisoAumentoRenta(contratoId: string) {
+  await requireSystemRole(READ_ROLES);
+  const id = recordIdSchema.parse(contratoId);
+  const ownerId = await getOwnerScope();
+  const contract = await prisma.contrato.findFirst({
+    where: { id, unidad: ownerId ? { propietarioId: ownerId } : undefined },
+    select: { estado: true, fechaFin: true, rentaMensualBase: true },
+  });
+  const effectiveDate = nextAnnualEffectiveDate();
+  const deliveryDeadline = new Date(Date.UTC(effectiveDate.getUTCFullYear() - 1, 11, 10));
+  if (!contract || contract.estado !== EstadoContrato.ACTIVO || contract.fechaFin < effectiveDate) {
+    return { estado: "FUERA_DE_VIGENCIA" as const, effectiveDate, deliveryDeadline };
+  }
+  const annual = await latestOfficialAnnualInflation();
+  if (!annual) return { estado: "PENDIENTE_INFLACION" as const, effectiveDate, deliveryDeadline };
+  const inflation = Number(annual.valor) / 100;
+  const rent = calculateRenewedRent(Number(contract.rentaMensualBase), inflation);
+  return { estado: "LISTO" as const, effectiveDate, deliveryDeadline, annualMonth: annual.mes, inflation, rent };
+}
+
+export async function generarAvisoAumentoRentaPdf(contratoId: string) {
+  await requireSystemRole(READ_ROLES);
+  const id = recordIdSchema.parse(contratoId);
+  const ownerId = await getOwnerScope();
+  const contract = await prisma.contrato.findFirst({
+    where: { id, unidad: ownerId ? { propietarioId: ownerId } : undefined },
+    include: { unidad: { include: { propiedad: true } } },
+  });
+  if (!contract) throw new DomainError("NOT_FOUND", "El contrato no existe.");
+  if (contract.unidad.propiedad.archivadaEn) throw new DomainError("PROPERTY_ARCHIVED", "La propiedad está archivada y es de solo consulta.");
+  const state = await obtenerEstadoAvisoAumentoRenta(id);
+  if (state.estado === "FUERA_DE_VIGENCIA") throw new DomainError("NOTICE_UNAVAILABLE", "El contrato no estará vigente en la fecha de actualización.");
+  if (state.estado === "PENDIENTE_INFLACION") throw new DomainError("MISSING_INFLATION", "Todavía no hay un dato anual de inflación de Banxico disponible.");
+  return renderToBuffer(createElement(RentIncreaseNoticeDocument, {
+    data: {
+      tenant: contract.arrendatario,
+      property: contract.unidad.propiedad.direccion,
+      unit: contract.unidad.identificador,
+      currentRent: formatCurrency(contract.rentaMensualBase),
+      newRent: formatCurrency(state.rent),
+      newRentWords: amountInWords(state.rent),
+      effectiveDate: formatDate(state.effectiveDate),
+    },
+  }) as unknown as ReactElement<DocumentProps>);
 }
 
 export async function generarPropuestaRenovacionPdf(contratoId: string) {
