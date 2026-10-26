@@ -284,6 +284,7 @@ export async function listarPropiedades({
         { direccion: { contains: busquedaNormalizada, mode: Prisma.QueryMode.insensitive } },
         { propietario: { nombre: { contains: busquedaNormalizada, mode: Prisma.QueryMode.insensitive } } },
         { marca: { nombreComercial: { contains: busquedaNormalizada, mode: Prisma.QueryMode.insensitive } } },
+        { unidades: { some: { ...unidadesDelUsuario, identificador: { contains: busquedaNormalizada, mode: Prisma.QueryMode.insensitive } } } },
       ],
     });
   }
