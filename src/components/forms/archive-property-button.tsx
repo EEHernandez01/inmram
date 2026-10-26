@@ -32,7 +32,7 @@ export function ArchivePropertyButton({
       <div className="p-6">
         <p className="text-[10px] font-bold uppercase tracking-[.13em] text-danger">Acción irreversible</p>
         <h2 className="mt-2 font-serif text-2xl font-semibold text-ink" id="archive-property-title">¿Eliminar propiedad?</h2>
-        <p className="mt-3 text-sm leading-6 text-ink-secondary" id="archive-property-description">La propiedad se archivará. Sus unidades, contratos, recibos, pagos, lecturas y archivos se conservarán, pero quedarán en modo solo consulta.</p>
+        <p className="mt-3 text-sm leading-6 text-ink-secondary" id="archive-property-description">La propiedad se archivará. Sus unidades, contratos, recibos, pagos, registros asociados y archivos se conservarán, pero quedarán en modo solo consulta.</p>
         <form action={action} className="mt-6 flex flex-wrap justify-end gap-3" method="post">
           <button className="cursor-pointer rounded border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-bg" onClick={() => setOpen(false)} type="button">Cancelar</button>
           <ArchiveSubmitButton />

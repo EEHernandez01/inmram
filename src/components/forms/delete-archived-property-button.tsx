@@ -19,7 +19,7 @@ export function DeleteArchivedPropertyButton({ action }: { action: string }) {
       <div className="p-6">
         <p className="text-[10px] font-bold uppercase tracking-[.13em] text-danger">Eliminación definitiva</p>
         <h2 className="mt-2 font-serif text-2xl font-semibold text-ink" id="delete-property-title">¿Eliminar permanentemente?</h2>
-        <p className="mt-3 text-sm leading-6 text-ink-secondary" id="delete-property-description">Se borrarán definitivamente la propiedad, sus unidades, contratos, recibos, pagos, lecturas y archivos. Esta acción no se puede deshacer.</p>
+        <p className="mt-3 text-sm leading-6 text-ink-secondary" id="delete-property-description">Se borrarán definitivamente la propiedad, sus unidades, contratos, recibos, pagos, registros asociados y archivos. Esta acción no se puede deshacer.</p>
         <form action={action} className="mt-6 flex flex-wrap justify-end gap-3" method="post">
           <button className="cursor-pointer rounded border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-bg" onClick={() => setOpen(false)} type="button">Cancelar</button>
           <button className="cursor-pointer rounded bg-danger px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-danger/90" type="submit">Eliminar permanentemente</button>
