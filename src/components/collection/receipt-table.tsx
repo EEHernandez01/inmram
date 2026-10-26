@@ -13,30 +13,36 @@ export function ReceiptTable({ canWrite, paymentDate, periodValue, receipts }: {
           <div className="mt-1 flex flex-wrap items-center gap-3"><p className="text-sm text-ink-secondary">{receipt.contrato.arrendatario}</p><ReceiptBadge status={receipt.estatus} />{receipt.contrato.unidad.propiedad.archivadaEn ? <span className="rounded-full bg-warning-soft px-2.5 py-1 text-xs font-semibold text-warning">Archivada</span> : null}</div>
         </div>
         <div className="flex shrink-0 items-center gap-5">
-          <div className="text-right"><p className="text-xs font-semibold uppercase tracking-wide text-ink-secondary">{receipt.estatus === "REVISION" ? "Saldo por revisar" : receipt.estatus === "OMITIDO" ? "Monto omitido" : "Saldo pendiente"}</p><p className={receipt.estatus === "REVISION" || receipt.estatus === "OMITIDO" ? "mt-1 text-lg font-bold text-ink-secondary [font-variant-numeric:tabular-nums]" : receipt.saldoPendiente > 0 ? "mt-1 text-lg font-bold text-danger [font-variant-numeric:tabular-nums]" : "mt-1 text-lg font-bold text-success [font-variant-numeric:tabular-nums]"}>{formatCurrency(receipt.saldoPendiente)}</p><p className="mt-1 text-xs text-ink-secondary [font-variant-numeric:tabular-nums]">Total {formatCurrency(receipt.total)}</p></div>
+          <div className="text-right"><p className="text-sm font-semibold text-ink-secondary">{receipt.estatus === "REVISION" ? "Saldo por revisar" : receipt.estatus === "OMITIDO" ? "Monto omitido" : "Saldo pendiente"}</p><p className={receipt.estatus === "REVISION" || receipt.estatus === "OMITIDO" ? "mt-1 text-xl font-bold text-ink-secondary [font-variant-numeric:tabular-nums]" : receipt.saldoPendiente > 0 ? "mt-1 text-xl font-bold text-danger [font-variant-numeric:tabular-nums]" : "mt-1 text-xl font-bold text-success [font-variant-numeric:tabular-nums]"}>{formatCurrency(receipt.saldoPendiente)}</p><p className="mt-1 text-sm text-ink-secondary [font-variant-numeric:tabular-nums]">Total del recibo: {formatCurrency(receipt.total)}</p></div>
           <span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center text-ink-secondary"><svg className="size-4 origin-center transition-transform duration-200 ease-out group-open:rotate-180" fill="none" viewBox="0 0 20 20"><path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" /></svg></span>
         </div>
       </summary>
       <div className="border-t border-border p-5 sm:p-6">
       <div className="grid gap-6 xl:grid-cols-[minmax(0,.6fr)_minmax(190px,.75fr)_minmax(180px,1.45fr)] xl:items-start">
         <div className="min-w-0">
-          <p className="text-sm font-semibold capitalize text-ink">Periodo cubierto: {formatReceiptPeriodRange(receipt.periodo, receipt.periodoFin)}</p>
-          <Link className="mt-2 inline-block text-sm font-semibold text-brand hover:text-brand-hover" href={`/propiedades/${receipt.contrato.unidad.propiedadId}/unidades/${receipt.contrato.unidadId}`}>Ver inmueble y unidad</Link>
+          <p className="text-base font-semibold text-ink">Periodo: {formatReceiptPeriodRange(receipt.periodo, receipt.periodoFin)}</p>
+          <Link className="mt-3 inline-flex min-h-11 items-center text-base font-semibold text-brand hover:text-brand-hover" href={`/propiedades/${receipt.contrato.unidad.propiedadId}/unidades/${receipt.contrato.unidadId}`}>Ver inmueble y unidad</Link>
         </div>
         <div className="border-l-0 border-border xl:border-l xl:pl-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-secondary">Vencimiento</p><p className="mt-1 text-sm font-semibold text-ink">{formatDate(receipt.fechaVencimiento)}</p>
-          {receipt.diasAtraso > 0 ? <p className="mt-1 text-sm font-semibold text-danger">{receipt.diasAtraso} {receipt.diasAtraso === 1 ? "día" : "días"} de atraso</p> : null}
-          {receipt.fechaPago ? <p className="mt-2 text-xs text-ink-secondary">Liquidado el {formatDate(receipt.fechaPago)} · {receipt.formaPago === "EFECTIVO" ? "Efectivo" : "Transferencia"}</p> : null}
+          <p className="text-sm font-semibold text-ink-secondary">Fecha límite de pago</p><p className="mt-1 text-base font-semibold text-ink">{formatDate(receipt.fechaVencimiento)}</p>
+          {receipt.diasAtraso > 0 ? <p className="mt-1 text-base font-semibold text-danger">{receipt.diasAtraso} {receipt.diasAtraso === 1 ? "día" : "días"} de atraso</p> : null}
+          {receipt.fechaPago ? <p className="mt-2 text-sm text-ink-secondary">Liquidado el {formatDate(receipt.fechaPago)} · {receipt.formaPago === "EFECTIVO" ? "Efectivo" : "Transferencia"}</p> : null}
         </div>
-        <div className="border-l-0 border-border text-left xl:border-l xl:pl-6 xl:text-right">
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-secondary">Total a cobrar</p><p className="mt-1 text-2xl font-bold tracking-tight text-ink [font-variant-numeric:tabular-nums]">{formatCurrency(receipt.total)}</p>
-          <p className="mt-1 text-xs text-ink-secondary [font-variant-numeric:tabular-nums]">Renta {formatCurrency(receipt.monto)}</p>
-          <p className="mt-2 text-xs text-ink-secondary [font-variant-numeric:tabular-nums]">Pagado {formatCurrency(receipt.montoPagado)} · <span className={receipt.saldoPendiente > 0 ? "font-semibold text-danger" : "font-semibold text-success"}>Saldo {formatCurrency(receipt.saldoPendiente)}</span></p>
+        <div className="rounded-xl border border-border bg-bg p-4">
+          <p className="text-base font-bold text-ink">Resumen del recibo</p>
+          <dl className="mt-3 grid grid-cols-3 gap-3 text-sm [font-variant-numeric:tabular-nums]">
+            <div><dt className="text-ink-secondary">Total</dt><dd className="mt-1 font-semibold text-ink">{formatCurrency(receipt.total)}</dd></div>
+            <div><dt className="text-ink-secondary">Pagado</dt><dd className="mt-1 font-semibold text-ink">{formatCurrency(receipt.montoPagado)}</dd></div>
+            <div><dt className="font-semibold text-ink-secondary">Falta pagar</dt><dd className={receipt.saldoPendiente > 0 ? "mt-1 font-bold text-danger" : "mt-1 font-bold text-success"}>{formatCurrency(receipt.saldoPendiente)}</dd></div>
+          </dl>
         </div>
       </div>
-      <div className="mt-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-4 border-t border-border pt-5">
-        <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-secondary">Documentos y seguimiento</p><ReceiptDocuments canWrite={canWrite && !receipt.contrato.unidad.propiedad.archivadaEn} periodValue={periodValue} receipt={receipt} /></div>
-        <div className="min-w-[330px]"><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-secondary">Registrar movimiento</p><ReceiptAction canWrite={canWrite && !receipt.contrato.unidad.propiedad.archivadaEn} paymentDate={paymentDate} periodValue={periodValue} receipt={receipt} /></div>
+      <div className="mt-6 border-t border-border pt-5">
+        <section aria-label="Documentos del recibo">
+          <h3 className="mb-3 text-base font-bold text-ink">Documentos y seguimiento</h3>
+          <ReceiptDocuments canWrite={canWrite && !receipt.contrato.unidad.propiedad.archivadaEn} periodValue={periodValue} receipt={receipt} />
+        </section>
+        <ReceiptAction canWrite={canWrite && !receipt.contrato.unidad.propiedad.archivadaEn} paymentDate={paymentDate} periodValue={periodValue} receipt={receipt} />
       </div>
       </div>
     </details>)}

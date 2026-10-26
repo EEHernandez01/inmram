@@ -24,7 +24,7 @@ export function Alert({
     <div
       {...props}
       aria-live={urgent ? "assertive" : "polite"}
-      className={`rounded border px-4 py-3 text-sm ${variantClasses[variant]} ${className}`}
+      className={`rounded border px-4 py-3 text-base leading-6 ${variantClasses[variant]} ${className}`}
       role={urgent ? "alert" : "status"}
     >
       {children}

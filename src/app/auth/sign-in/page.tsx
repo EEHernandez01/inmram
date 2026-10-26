@@ -32,7 +32,7 @@ export default function SignInPage() {
           <h1 className="mt-5 font-serif text-2xl font-semibold text-ink">
             Acceso al sistema
           </h1>
-          <p className="mt-2 text-sm text-ink-secondary">
+          <p className="mt-2 text-base leading-7 text-ink-secondary">
             Ingresa con la cuenta asignada por el administrador.
           </p>
         </div>
@@ -40,7 +40,7 @@ export default function SignInPage() {
         <form action={formAction} className="space-y-5">
           <div>
             <label
-              className="mb-2 block text-sm font-semibold text-ink"
+              className="mb-2 block text-base font-semibold text-ink"
               htmlFor="email"
             >
               Correo electrónico
@@ -49,7 +49,7 @@ export default function SignInPage() {
               autoComplete="email"
               aria-describedby={state.error ? "sign-in-error" : undefined}
               aria-invalid={state.invalidField === "email"}
-              className="w-full rounded border border-border bg-surface px-3 py-2.5 text-sm text-ink outline-none placeholder:text-ink-secondary focus:border-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              className="min-h-12 w-full rounded border border-border bg-surface px-3 py-3 text-base text-ink outline-none placeholder:text-ink-secondary focus:border-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
               defaultValue={state.email}
               id="email"
               name="email"
@@ -62,7 +62,7 @@ export default function SignInPage() {
 
           <div>
             <label
-              className="mb-2 block text-sm font-semibold text-ink"
+              className="mb-2 block text-base font-semibold text-ink"
               htmlFor="password"
             >
               Contraseña
@@ -71,7 +71,7 @@ export default function SignInPage() {
               autoComplete="current-password"
               aria-describedby={state.error ? "sign-in-error" : undefined}
               aria-invalid={state.invalidField === "password"}
-              className="w-full rounded border border-border bg-surface px-3 py-2.5 text-sm text-ink outline-none placeholder:text-ink-secondary focus:border-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              className="min-h-12 w-full rounded border border-border bg-surface px-3 py-3 text-base text-ink outline-none placeholder:text-ink-secondary focus:border-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
               id="password"
               minLength={8}
               name="password"
@@ -89,7 +89,7 @@ export default function SignInPage() {
           ) : null}
 
           <button
-            className="w-full rounded bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-12 w-full rounded bg-brand px-4 py-3 text-base font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isPending}
             type="submit"
           >
@@ -97,9 +97,8 @@ export default function SignInPage() {
           </button>
         </form>
 
-        <p className="mt-6 text-xs text-ink-secondary">
-          El registro público está deshabilitado. Solicita una cuenta al
-          administrador del sistema.
+        <p className="mt-6 text-sm leading-6 text-ink-secondary">
+          ¿Necesitas acceso? Solicita una cuenta al administrador del sistema.
         </p>
       </section>
     </main>

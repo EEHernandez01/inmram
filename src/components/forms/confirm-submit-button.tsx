@@ -2,7 +2,7 @@
 
 export function ConfirmSubmitButton({
   children,
-  className = "cursor-pointer text-sm font-semibold text-brand hover:text-brand-hover",
+  className = "min-h-11 cursor-pointer px-4 py-3 text-base font-semibold text-brand hover:text-brand-hover",
   message,
 }: {
   children: React.ReactNode;

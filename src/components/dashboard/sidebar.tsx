@@ -19,10 +19,10 @@ const groups: { label?: string; items: { href: string; label: string; icon: Icon
     ],
   },
   {
-    label: "Análisis",
+    label: "Informes",
     items: [
-      { href: "/reportes", label: "Rentabilidad", icon: "chart", roles: [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR, RolUsuario.PROPIETARIO, RolUsuario.SOLO_LECTURA] },
-      { href: "/inflacion", label: "Ajustes de renta", icon: "chart", roles: [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR] },
+      { href: "/reportes", label: "Ingresos y gastos", icon: "chart", roles: [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR, RolUsuario.PROPIETARIO, RolUsuario.SOLO_LECTURA] },
+      { href: "/inflacion", label: "Aumentos de renta", icon: "chart", roles: [RolUsuario.ADMINISTRADOR, RolUsuario.GESTOR] },
     ],
   },
   {
@@ -53,7 +53,7 @@ function Navigation({ role, onNavigate }: { role: RolUsuario; onNavigate?: () =>
   const pathname = usePathname();
   return <nav aria-label="Navegación principal" className="space-y-5">
     {groups.map((group) => <div key={group.label ?? "inicio"}>
-      {group.label ? <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary/70">{group.label}</p> : null}
+      {group.label ? <p className="mb-2 px-3 text-xs font-bold uppercase tracking-[0.1em] text-ink-secondary">{group.label}</p> : null}
       <div className="space-y-1">{group.items.filter((item) => !item.roles || item.roles.includes(role)).map((item) => {
         const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
         return <Link aria-current={active ? "page" : undefined} className={active ? "nav-item nav-item-active" : "nav-item"} href={item.href} key={item.href} onClick={onNavigate}><Icon name={item.icon}/><span>{item.label}</span></Link>;
@@ -114,9 +114,8 @@ export function Sidebar({ alias, email, name, role }: { alias?: string | null; e
   return (
     <>
       <MobileNavigation alias={alias} email={email} name={name} role={role} />
-      <aside className="fixed inset-y-0 left-0 hidden w-[272px] flex-col bg-bg px-5 py-6 lg:flex">
-        <Link className="brand-lockup" href="/dashboard"><span className="brand-mark">R</span><span>INMOBILIARIA RAMOS</span></Link>
-        <div className="mt-10 flex-1 overflow-y-auto"><Navigation role={role} /></div>
+      <aside className="fixed inset-y-0 left-0 hidden w-[272px] flex-col bg-bg px-5 py-6 lg:top-[76px] lg:flex">
+        <div className="flex-1 overflow-y-auto"><Navigation role={role} /></div>
         <div className="mt-5 border-t border-border pt-4">
           <details className="group relative">
             <summary className="account-menu-trigger nav-item cursor-pointer list-none [&::-webkit-details-marker]:hidden">
