@@ -17,7 +17,7 @@ export async function generarReciboPdf(receiptId: string) {
   const { user, session } = await requireSystemRole(READ_ROLES);
   const ownerId = await getOwnerScope();
   const id = recordIdSchema.parse(receiptId);
-  const receipt = await prisma.recibo.findFirst({ where: { id, contrato: ownerId ? { unidad: { propietarioId: ownerId } } : undefined }, include: { contrato: { include: { unidad: { include: { propiedad: true, propietario: true } } } }, pagos: { where: { anuladoEn: null } } } });
+  const receipt = await prisma.recibo.findFirst({ where: { id, contrato: ownerId ? { unidad: { propietarioId: ownerId } } : undefined }, include: { contrato: { include: { unidad: { include: { propiedad: true, propietario: true } } } } } });
   if (!receipt) throw new DomainError("NOT_FOUND", "El recibo no existe.");
   const total = calculateReceiptTotal({ rent: Number(receipt.monto) });
   const issuer = user.perfil?.razonSocial || user.perfil?.nombreCompleto || session.user.name || "Administración de rentas";
@@ -30,7 +30,7 @@ export async function generarReciboPdf(receiptId: string) {
     property: receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim(),
     unit: receipt.contrato.unidad.identificador,
     rentalPeriod: formatRentalPeriod(receipt.periodo, receipt.periodoFin),
-    issuedAt: formatLetterDate(receipt.fechaPago ?? new Date()),
+    issuedAt: formatLetterDate(receipt.fechaVencimiento),
   };
   return renderToBuffer(<ReceiptDocument data={data} />);
 }
@@ -68,7 +68,7 @@ export async function generarRecibosCobranzaPdf({
       property: receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim(),
       unit: receipt.contrato.unidad.identificador,
       rentalPeriod: formatRentalPeriod(receipt.periodo, receipt.periodoFin),
-      issuedAt: formatLetterDate(receipt.fechaPago ?? new Date()),
+      issuedAt: formatLetterDate(receipt.fechaVencimiento),
     };
   });
   return renderToBuffer(<Document title="Recibos de cobranza" author={issuer}>{pages.map((data, index) => <ReceiptPage data={data} key={`${included[index].id}-${index}`} />)}</Document>);
