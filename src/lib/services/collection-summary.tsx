@@ -21,6 +21,7 @@ export async function generarResumenCobranzaMensualPdf(periodValue: string) {
       contrato: ownerId ? { unidad: { propietarioId: ownerId } } : undefined,
     },
     orderBy: [
+      { fechaVencimiento: "asc" },
       { contrato: { unidad: { propiedad: { direccion: "asc" } } } },
       { contrato: { unidad: { identificador: "asc" } } },
       { id: "asc" },

@@ -4,7 +4,7 @@ const navy = "#1E3A5F";
 const slate = "#57534E";
 
 const styles = StyleSheet.create({
-  page: { backgroundColor: "#FFFFFF", color: "#1C1917", fontFamily: "Helvetica", fontSize: 12, lineHeight: 1.45, paddingHorizontal: 66, paddingTop: 72 },
+  page: { backgroundColor: "#FFFFFF", color: "#1C1917", fontFamily: "Helvetica", fontSize: 12, justifyContent: "center", lineHeight: 1.45, paddingHorizontal: 66, paddingTop: 72 },
   heading: { color: navy, fontFamily: "Helvetica-Bold", fontSize: 17, textAlign: "center" },
   date: { color: slate, fontSize: 10, marginTop: 38, textAlign: "right" },
   greeting: { fontSize: 13, marginTop: 40 },
@@ -49,7 +49,7 @@ export function RenewalProposalDocument({ data }: { data: RenewalProposalPdfData
         Agradeceremos tu respuesta. En caso de aceptar la propuesta, prepararemos la renovación correspondiente.
       </Text>
       <View style={styles.signature}>
-        <Text style={styles.signatureLine}>{data.signer}</Text>
+        <Text style={styles.signatureLine}>{data.signer.replace(/^inmobiliaria/i, "Inmobiliaria")}</Text>
         <Text style={styles.signerRole}>Apoderado legal</Text>
       </View>
       {!data.isPreview ? <Text style={styles.footer}>Propuesta administrativa de renovación. No constituye un contrato ni comprobante fiscal.</Text> : null}
