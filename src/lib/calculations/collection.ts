@@ -108,6 +108,46 @@ export function calculateContractReceiptDueDate(period: Date, paymentDay: number
   return calculateReceiptDueDate(period, paymentDay);
 }
 
+export function calculateContractFirstCollectionDate(startDate: Date, paymentDay: number) {
+  const startPeriod = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), 1));
+  const firstDueDate = calculateReceiptDueDate(startPeriod, paymentDay);
+  if (firstDueDate.getTime() >= startDate.getTime()) return firstDueDate;
+  return calculateReceiptDueDate(new Date(Date.UTC(startPeriod.getUTCFullYear(), startPeriod.getUTCMonth() + 1, 1)), paymentDay);
+}
+
+export function calculateNextContractCollectionDate({
+  currentDate,
+  startDate,
+  endDate,
+  paymentDay,
+  firstCollectionDate,
+  intervalMonths = 1,
+}: {
+  currentDate: Date;
+  startDate: Date;
+  endDate: Date;
+  paymentDay: number;
+  firstCollectionDate: Date | null;
+  intervalMonths?: number;
+}) {
+  const anchor = firstCollectionDate ?? calculateContractFirstCollectionDate(startDate, paymentDay);
+  const currentMonth = currentDate.getUTCFullYear() * 12 + currentDate.getUTCMonth();
+  const anchorMonth = anchor.getUTCFullYear() * 12 + anchor.getUTCMonth();
+  const firstMonth = Math.max(currentMonth, anchorMonth);
+  const currentPeriod = new Date(Date.UTC(Math.floor(firstMonth / 12), firstMonth % 12, 1));
+
+  for (let offset = 0; offset <= intervalMonths + 12; offset += 1) {
+    const period = new Date(Date.UTC(currentPeriod.getUTCFullYear(), currentPeriod.getUTCMonth() + offset, 1));
+    const dueDate = calculateContractReceiptDueDate(period, paymentDay, anchor);
+    if (!collectionPeriodIsEligible(period, anchor, intervalMonths)) continue;
+    if (dueDate < currentDate || dueDate < startDate) continue;
+    if (dueDate > endDate) return null;
+    return dueDate;
+  }
+
+  return null;
+}
+
 export function calculateReceiptStatus({
   currentDate,
   dueDate,

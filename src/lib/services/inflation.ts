@@ -243,7 +243,7 @@ export async function generarPropuestaRenovacionPdf(contratoId: string) {
   await requireSystemRole(READ_ROLES);
   const id = recordIdSchema.parse(contratoId);
   const ownerId = await getOwnerScope();
-  const contract = await prisma.contrato.findFirst({ where: { id, unidad: ownerId ? { propietarioId: ownerId } : undefined }, include: { unidad: { include: { propiedad: true } } } });
+  const contract = await prisma.contrato.findFirst({ where: { id, unidad: ownerId ? { propietarioId: ownerId } : undefined }, include: { unidad: { include: { propiedad: { include: { propietario: true } } } } } });
   if (!contract) throw new DomainError("NOT_FOUND", "El contrato no existe.");
   const state = await obtenerEstadoPropuestaRenovacion(id);
   if (state.estado === "FUERA_DE_VENTANA") throw new DomainError("PROPOSAL_UNAVAILABLE", "La propuesta solo está disponible durante el mes previo al vencimiento.");
@@ -253,6 +253,7 @@ export async function generarPropuestaRenovacionPdf(contratoId: string) {
   return renderToBuffer(createElement(RenewalProposalDocument, {
     data: {
       tenant: contract.arrendatario,
+      signer: contract.unidad.propiedad.propietario.nombre,
       property: contract.unidad.propiedad.direccion,
       unit: contract.unidad.identificador,
       preparedDate: formatDate(state.preparadaEn ?? new Date()),
@@ -263,6 +264,42 @@ export async function generarPropuestaRenovacionPdf(contratoId: string) {
       renewalStart: formatDate(state.start),
       renewalEnd: formatDate(state.end),
       paymentNote,
+    },
+  }) as unknown as ReactElement<DocumentProps>);
+}
+
+export async function generarVistaPreviaPropuestaRenovacionPdf(contratoId: string) {
+  await requireSystemRole(READ_ROLES);
+  const id = recordIdSchema.parse(contratoId);
+  const ownerId = await getOwnerScope();
+  const contract = await prisma.contrato.findFirst({
+    where: { id, unidad: ownerId ? { propietarioId: ownerId } : undefined },
+    include: { unidad: { include: { propiedad: { include: { propietario: true } } } } },
+  });
+  if (!contract) throw new DomainError("NOT_FOUND", "El contrato no existe.");
+
+  const inpc = await latestAnnualInpc();
+  const inflation = inpc?.inflation ?? 0.035;
+  const currentRent = Number(contract.rentaMensualBase);
+  const proposedRent = calculateRenewedRent(currentRent, inflation);
+  const { start, end } = renewalTermDates(contract.fechaFin);
+  const today = currentCollectionDate();
+
+  return renderToBuffer(createElement(RenewalProposalDocument, {
+    data: {
+      tenant: contract.arrendatario,
+      signer: contract.unidad.propiedad.propietario.nombre,
+      property: contract.unidad.propiedad.direccion,
+      unit: contract.unidad.identificador,
+      preparedDate: formatDate(today),
+      currentRent: formatCurrency(currentRent),
+      inflation: formatPercent(inflation * 100),
+      proposedRent: formatCurrency(proposedRent),
+      proposedRentWords: amountInWords(proposedRent),
+      renewalStart: formatDate(start),
+      renewalEnd: formatDate(end),
+      paymentNote: contract.diaPago !== start.getUTCDate() ? `Conservaremos el día ${contract.diaPago} como fecha habitual de pago.` : undefined,
+      isPreview: true,
     },
   }) as unknown as ReactElement<DocumentProps>);
 }

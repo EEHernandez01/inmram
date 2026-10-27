@@ -8,6 +8,7 @@ import {
   calculateReceiptCoverage,
   calculatePeriodicCharge,
   calculateContractReceiptDueDate,
+  calculateContractFirstCollectionDate,
   collectionIntervalMonths,
   collectionPeriodIsEligible,
   calculateReceiptStatus,
@@ -80,14 +81,18 @@ export async function sincronizarCobranzaSistema(now = new Date()) {
       id: true,
       rentaMensualBase: true,
       diaPago: true,
+      fechaInicio: true,
       fechaProximoCobro: true,
       fechaFin: true,
       periodicidadCobro: true,
     },
   });
 
-  const receiptData = contracts.filter((contract) => collectionPeriodIsEligible(period, contract.fechaProximoCobro, collectionIntervalMonths(contract.periodicidadCobro))).map((contract) => {
-      const dueDate = calculateContractReceiptDueDate(period, contract.diaPago, contract.fechaProximoCobro);
+  const receiptData = contracts.map((contract) => ({
+    contract,
+    firstCollectionDate: contract.fechaProximoCobro ?? calculateContractFirstCollectionDate(contract.fechaInicio, contract.diaPago),
+  })).filter(({ contract, firstCollectionDate }) => collectionPeriodIsEligible(period, firstCollectionDate, collectionIntervalMonths(contract.periodicidadCobro))).map(({ contract, firstCollectionDate }) => {
+      const dueDate = calculateContractReceiptDueDate(period, contract.diaPago, firstCollectionDate);
       const intervalMonths = collectionIntervalMonths(contract.periodicidadCobro);
       const coverage = calculateReceiptCoverage(period, intervalMonths, contract.fechaFin);
       return {
