@@ -30,7 +30,7 @@ export async function generarReciboPdf(receiptId: string) {
     property: receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim(),
     unit: receipt.contrato.unidad.identificador,
     rentalPeriod: formatRentalPeriod(receipt.periodo, receipt.periodoFin),
-    issuedAt: formatLetterDate(new Date()),
+    issuedAt: formatLetterDate(receipt.fechaPago ?? new Date()),
   };
   return renderToBuffer(<ReceiptDocument data={data} />);
 }
@@ -68,7 +68,7 @@ export async function generarRecibosCobranzaPdf({
       property: receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim(),
       unit: receipt.contrato.unidad.identificador,
       rentalPeriod: formatRentalPeriod(receipt.periodo, receipt.periodoFin),
-      issuedAt: formatLetterDate(new Date()),
+      issuedAt: formatLetterDate(receipt.fechaPago ?? new Date()),
     };
   });
   return renderToBuffer(<Document title="Recibos de cobranza" author={issuer}>{pages.map((data, index) => <ReceiptPage data={data} key={`${included[index].id}-${index}`} />)}</Document>);
