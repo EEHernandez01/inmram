@@ -3,7 +3,7 @@ import "server-only";
 import { Document, renderToBuffer } from "@react-pdf/renderer";
 
 import { getOwnerScope, READ_ROLES, requireSystemRole } from "@/lib/auth/authorization";
-import { calculateReceiptTotal, receiptPeriodFromValue } from "@/lib/calculations/collection";
+import { calculateReceiptDueDate, calculateReceiptTotal, receiptPeriodFromValue } from "@/lib/calculations/collection";
 import { prisma } from "@/lib/db/prisma";
 import { DomainError } from "@/lib/domain/errors";
 import { formatCurrency, formatReceiptPeriodRange } from "@/lib/format";
@@ -30,7 +30,7 @@ export async function generarReciboPdf(receiptId: string) {
     property: receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim(),
     unit: receipt.contrato.unidad.identificador,
     rentalPeriod: formatRentalPeriod(receipt.periodo, receipt.periodoFin),
-    issuedAt: formatLetterDate(receipt.fechaVencimiento),
+    issuedAt: formatLetterDate(calculateReceiptDueDate(receipt.periodo, receipt.contrato.diaPago)),
   };
   return renderToBuffer(<ReceiptDocument data={data} />);
 }
@@ -68,7 +68,7 @@ export async function generarRecibosCobranzaPdf({
       property: receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim(),
       unit: receipt.contrato.unidad.identificador,
       rentalPeriod: formatRentalPeriod(receipt.periodo, receipt.periodoFin),
-      issuedAt: formatLetterDate(receipt.fechaVencimiento),
+      issuedAt: formatLetterDate(calculateReceiptDueDate(receipt.periodo, receipt.contrato.diaPago)),
     };
   });
   return renderToBuffer(<Document title="Recibos de cobranza" author={issuer}>{pages.map((data, index) => <ReceiptPage data={data} key={`${included[index].id}-${index}`} />)}</Document>);
