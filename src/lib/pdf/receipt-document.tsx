@@ -8,10 +8,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 1.45,
     paddingHorizontal: 66,
-    paddingTop: 120,
+    paddingTop: 240,
   },
-  date: { fontSize: 12, marginTop: 36, textAlign: "right" },
-  content: { flexGrow: 1, justifyContent: "center" },
+  date: { fontSize: 12, marginBottom: 80, textAlign: "right" },
+  content: { flexGrow: 1 },
   paragraph: { fontSize: 13, lineHeight: 1.55, textAlign: "justify" },
   emphasis: { fontFamily: "Helvetica-Bold" },
   signature: { marginTop: 70, width: 250 },
@@ -39,8 +39,8 @@ export function ReceiptDocument({ data }: { data: ReceiptPdfData }) {
 
 export function ReceiptPage({ data }: { data: ReceiptPdfData }) {
   return <Page size="LETTER" style={styles.page}>
-      <Text style={styles.date}>{data.issuedAt}</Text>
       <View style={styles.content}>
+        <Text style={styles.date}>{data.issuedAt}</Text>
         <Text style={styles.paragraph}>
           Recibí del Sr. <Text style={styles.emphasis}>{data.tenant}</Text> la cantidad de <Text style={styles.emphasis}>{data.total}</Text> ({data.totalInWords}) por concepto de renta <Text style={styles.emphasis}>{data.rentalPeriod}</Text>, del departamento ubicado en <Text style={styles.emphasis}>{data.property}, departamento {data.unit}</Text>.
         </Text>
