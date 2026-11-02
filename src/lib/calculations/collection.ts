@@ -82,7 +82,6 @@ export function calculateReceiptCoverage(
   intervalMonths: number,
   contractEndDate?: Date | null,
   contractStartDate?: Date | null,
-  firstCollectionDate?: Date | null,
 ) {
   if (!Number.isInteger(intervalMonths) || intervalMonths < 1) throw new Error("La periodicidad de cobro no es válida.");
   if (!contractStartDate) {
@@ -98,14 +97,9 @@ export function calculateReceiptCoverage(
     };
   }
   const anchorDate = contractStartDate;
-  const collectionAnchor = firstCollectionDate ?? anchorDate;
-  const monthOffset = (period.getUTCFullYear() - collectionAnchor.getUTCFullYear()) * 12
-    + period.getUTCMonth() - collectionAnchor.getUTCMonth();
-  let firstCycleOffset = 0;
-  while (addMonthsOnContractAnniversary(anchorDate, firstCycleOffset + intervalMonths) < collectionAnchor) {
-    firstCycleOffset += intervalMonths;
-  }
-  const cycleOffset = firstCycleOffset + Math.max(0, Math.floor(monthOffset / intervalMonths)) * intervalMonths;
+  const monthOffset = (period.getUTCFullYear() - anchorDate.getUTCFullYear()) * 12
+    + period.getUTCMonth() - anchorDate.getUTCMonth();
+  const cycleOffset = Math.max(0, monthOffset);
   const periodStart = addMonthsOnContractAnniversary(anchorDate, cycleOffset);
   const unboundedEnd = addMonthsOnContractAnniversary(anchorDate, cycleOffset + intervalMonths);
   const periodEnd = contractEndDate && contractEndDate < unboundedEnd ? contractEndDate : unboundedEnd;

@@ -94,7 +94,7 @@ export async function sincronizarCobranzaSistema(now = new Date()) {
   })).filter(({ contract, firstCollectionDate }) => collectionPeriodIsEligible(period, firstCollectionDate, collectionIntervalMonths(contract.periodicidadCobro))).map(({ contract, firstCollectionDate }) => {
       const dueDate = calculateContractReceiptDueDate(period, contract.diaPago, firstCollectionDate);
       const intervalMonths = collectionIntervalMonths(contract.periodicidadCobro);
-      const coverage = calculateReceiptCoverage(period, intervalMonths, contract.fechaFin, contract.fechaInicio, firstCollectionDate);
+      const coverage = calculateReceiptCoverage(period, intervalMonths, contract.fechaFin, contract.fechaInicio);
       return {
         contratoId: contract.id,
         periodo: period,

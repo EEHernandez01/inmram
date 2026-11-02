@@ -30,7 +30,7 @@ export async function generarReciboPdf(receiptId: string) {
     totalInWords: amountInWords(total),
     property: receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim(),
     unit: receipt.contrato.unidad.identificador,
-    rentalPeriod: formatContractReceiptPeriodRange(receipt.periodo, receipt.contrato.periodicidadCobro, receipt.contrato.fechaInicio, receipt.contrato.fechaFin, receipt.contrato.fechaProximoCobro, receipt.contrato.diaPago),
+    rentalPeriod: formatContractReceiptPeriodRange(receipt.periodo, receipt.contrato.periodicidadCobro, receipt.contrato.fechaInicio, receipt.contrato.fechaFin),
     issuedAt: formatLetterDate(calculateReceiptDueDate(receipt.periodo, receipt.contrato.diaPago)),
   };
   return renderToBuffer(<ReceiptDocument data={data} />);
@@ -77,7 +77,7 @@ export async function generarRecibosCobranzaPdf({
       totalInWords: amountInWords(total),
       property: receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim(),
       unit: receipt.contrato.unidad.identificador,
-      rentalPeriod: formatContractReceiptPeriodRange(receipt.periodo, receipt.contrato.periodicidadCobro, receipt.contrato.fechaInicio, receipt.contrato.fechaFin, receipt.contrato.fechaProximoCobro, receipt.contrato.diaPago),
+      rentalPeriod: formatContractReceiptPeriodRange(receipt.periodo, receipt.contrato.periodicidadCobro, receipt.contrato.fechaInicio, receipt.contrato.fechaFin),
       issuedAt: formatLetterDate(calculateReceiptDueDate(receipt.periodo, receipt.contrato.diaPago)),
     };
   });
@@ -131,6 +131,6 @@ export async function generarComprobantePagoPdf(receiptId: string) {
   const total = calculateReceiptTotal({ rent: Number(receipt.monto) });
   const issuer = user.perfil?.razonSocial || user.perfil?.nombreCompleto || session.user.name || "Administración de rentas";
   const property = receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim();
-  const data = { issuer, folio: receipt.id.slice(0, 8).toUpperCase(), tenant: receipt.contrato.arrendatario, concept: "renta", total: formatCurrency(total), totalInWords: amountInWords(total), property, unit: receipt.contrato.unidad.identificador, period: formatContractReceiptPeriodRange(receipt.periodo, receipt.contrato.periodicidadCobro, receipt.contrato.fechaInicio, receipt.contrato.fechaFin, receipt.contrato.fechaProximoCobro, receipt.contrato.diaPago), paymentDate: formatReceiptPlaceAndDate(receipt.fechaPago) };
+  const data = { issuer, folio: receipt.id.slice(0, 8).toUpperCase(), tenant: receipt.contrato.arrendatario, concept: "renta", total: formatCurrency(total), totalInWords: amountInWords(total), property, unit: receipt.contrato.unidad.identificador, period: formatContractReceiptPeriodRange(receipt.periodo, receipt.contrato.periodicidadCobro, receipt.contrato.fechaInicio, receipt.contrato.fechaFin), paymentDate: formatReceiptPlaceAndDate(receipt.fechaPago) };
   return renderToBuffer(<PaymentReceiptDocument data={data} />);
 }

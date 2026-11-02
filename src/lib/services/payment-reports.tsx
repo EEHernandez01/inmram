@@ -86,7 +86,6 @@ export async function obtenerReportePagosMensual(input: unknown = {}) {
       collectionIntervalMonths(receipt.contrato.periodicidadCobro),
       receipt.contrato.fechaFin,
       receipt.contrato.fechaInicio,
-      receipt.contrato.fechaProximoCobro,
     );
     return {
       id: payment.id,

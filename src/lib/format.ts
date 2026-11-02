@@ -1,4 +1,4 @@
-import { calculateContractFirstCollectionDate, calculateReceiptCoverage, collectionIntervalMonths, type CollectionFrequency } from "./calculations/collection.ts";
+import { calculateReceiptCoverage, collectionIntervalMonths, type CollectionFrequency } from "./calculations/collection.ts";
 
 type NumericValue = { toString(): string } | string | number;
 
@@ -49,16 +49,12 @@ export function formatContractReceiptPeriodRange(
   frequency: CollectionFrequency,
   contractStartDate: Date,
   contractEndDate: Date,
-  firstCollectionDate: Date | null,
-  paymentDay: number,
 ) {
-  const firstPeriodDate = firstCollectionDate ?? calculateContractFirstCollectionDate(contractStartDate, paymentDay);
   const coverage = calculateReceiptCoverage(
     period,
     collectionIntervalMonths(frequency),
     contractEndDate,
     contractStartDate,
-    firstPeriodDate,
   );
   return formatDateRange(coverage.periodStart, coverage.periodEnd);
 }

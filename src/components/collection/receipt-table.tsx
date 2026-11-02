@@ -20,7 +20,7 @@ export function ReceiptTable({ canWrite, paymentDate, periodValue, receipts }: {
       <div className="border-t border-border p-5 sm:p-6">
       <div className="grid gap-6 xl:grid-cols-[minmax(0,.6fr)_minmax(190px,.75fr)_minmax(180px,1.45fr)] xl:items-start">
         <div className="min-w-0">
-          <p className="text-base font-semibold text-ink">Periodo: {formatContractReceiptPeriodRange(receipt.periodo, receipt.contrato.periodicidadCobro, receipt.contrato.fechaInicio, receipt.contrato.fechaFin, receipt.contrato.fechaProximoCobro, receipt.contrato.diaPago)}</p>
+          <p className="text-base font-semibold text-ink">Periodo: {formatContractReceiptPeriodRange(receipt.periodo, receipt.contrato.periodicidadCobro, receipt.contrato.fechaInicio, receipt.contrato.fechaFin)}</p>
           <Link className="mt-3 inline-flex min-h-11 items-center text-base font-semibold text-brand hover:text-brand-hover" href={`/propiedades/${receipt.contrato.unidad.propiedadId}/unidades/${receipt.contrato.unidadId}`}>Ver inmueble y unidad</Link>
         </div>
         <div className="border-l-0 border-border xl:border-l xl:pl-6">
