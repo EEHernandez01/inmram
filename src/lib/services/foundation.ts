@@ -35,6 +35,7 @@ import {
   calculateReceiptCoverage,
   collectionIntervalMonths,
   collectionPeriodIsEligible,
+  isIncludedInMonthlyCollection,
   calculateReceiptStatus,
   contractOverlapsPeriod,
   currentCollectionDate,
@@ -979,6 +980,7 @@ async function crearContratoEnTransaccion(
 
   if (
     data.estado === EstadoContrato.ACTIVO &&
+    isIncludedInMonthlyCollection(data.periodicidadCobro) &&
     contractOverlapsPeriod({ startDate, endDate, period }) &&
     collectionPeriodIsEligible(period, nextCollectionDate, collectionIntervalMonths(data.periodicidadCobro)) &&
     nextCollectionDate.getTime() <= new Date(Date.UTC(period.getUTCFullYear(), period.getUTCMonth() + 1, 0)).getTime() &&
@@ -1052,7 +1054,7 @@ export async function actualizarContrato(
     const receiptsBeforeReview = await tx.recibo.findMany({ where: receiptsToReview, select: { id: true, estatus: true } });
     const reviewed = await tx.recibo.updateMany({ where: receiptsToReview, data: { estatus: EstadoRecibo.REVISION } });
     for (const receipt of receiptsBeforeReview) await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "ENVIAR_A_REVISION", entidad: "Recibo", entidadId: receipt.id, antes: { estatus: receipt.estatus }, despues: { estatus: EstadoRecibo.REVISION, contratoId: id } });
-    const receipt = collectionPeriodIsEligible(period, nextCollectionDate, collectionIntervalMonths(updated.periodicidadCobro)) ? await tx.recibo.findFirst({ where: { contratoId: id, periodo: period, estatus: { notIn: [EstadoRecibo.PAGADO, EstadoRecibo.OMITIDO, EstadoRecibo.REVISION] } }, include: { pagos: { where: { anuladoEn: null }, orderBy: { fechaPago: "desc" } } } }) : null;
+    const receipt = isIncludedInMonthlyCollection(updated.periodicidadCobro) && collectionPeriodIsEligible(period, nextCollectionDate, collectionIntervalMonths(updated.periodicidadCobro)) ? await tx.recibo.findFirst({ where: { contratoId: id, periodo: period, estatus: { notIn: [EstadoRecibo.PAGADO, EstadoRecibo.OMITIDO, EstadoRecibo.REVISION] } }, include: { pagos: { where: { anuladoEn: null }, orderBy: { fechaPago: "desc" } } } }) : null;
     const coverage = calculateReceiptCoverage(period, collectionIntervalMonths(updated.periodicidadCobro), updated.fechaFin, updated.fechaInicio);
     if (receipt && coverage.months > 0 && coverage.periodEnd >= period) {
       const dueDate = calculateContractReceiptDueDate(period, updated.diaPago, nextCollectionDate);
@@ -1063,7 +1065,9 @@ export async function actualizarContrato(
       const updatedReceipt = await tx.recibo.update({ where: { id: receipt.id }, data: { periodoInicio: coverage.periodStart, periodoFin: coverage.periodEnd, fechaVencimiento: dueDate, monto: amount, cargoFijo: 0, estatus: paid ? EstadoRecibo.PAGADO : calculateReceiptStatus({ currentDate: currentCollectionDate(), dueDate, paid: false }), fechaPago: paid ? latestPayment?.fechaPago ?? null : null, formaPago: paid ? latestPayment?.formaPago ?? null : null } });
       await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "ACTUALIZAR_RECIBO_CONTRATO", entidad: "Recibo", entidadId: receipt.id, antes: { monto: receipt.monto.toString(), cargoFijo: receipt.cargoFijo.toString(), periodoInicio: receipt.periodoInicio.toISOString(), periodoFin: receipt.periodoFin.toISOString(), fechaVencimiento: receipt.fechaVencimiento.toISOString(), estatus: receipt.estatus }, despues: { monto: updatedReceipt.monto.toString(), cargoFijo: updatedReceipt.cargoFijo.toString(), periodoInicio: updatedReceipt.periodoInicio.toISOString(), periodoFin: updatedReceipt.periodoFin.toISOString(), fechaVencimiento: updatedReceipt.fechaVencimiento.toISOString(), estatus: updatedReceipt.estatus } });
     }
-    await reconcileReceiptOverlaps(tx, id, user.id);
+    if (isIncludedInMonthlyCollection(updated.periodicidadCobro)) {
+      await reconcileReceiptOverlaps(tx, id, user.id);
+    }
     await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "ACTUALIZAR", entidad: "Contrato", entidadId: id, antes: { estado: before.estado, fechaInicio: before.fechaInicio.toISOString(), fechaFin: before.fechaFin.toISOString(), fechaProximoCobro: before.fechaProximoCobro?.toISOString() ?? null, periodicidadCobro: before.periodicidadCobro, formaPago: before.formaPago, rentaMensualBase: before.rentaMensualBase.toString(), diaPago: before.diaPago }, despues: { estado: updated.estado, fechaInicio: updated.fechaInicio.toISOString(), fechaFin: updated.fechaFin.toISOString(), fechaProximoCobro: nextCollectionDate.toISOString(), periodicidadCobro: updated.periodicidadCobro, formaPago: updated.formaPago, recibosEnRevision: reviewed.count, reciboActualizado: Boolean(receipt), rentaMensualBase: updated.rentaMensualBase.toString(), diaPago: updated.diaPago } });
     return updated;
   });

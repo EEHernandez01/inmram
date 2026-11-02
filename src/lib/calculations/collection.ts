@@ -9,6 +9,12 @@ const COLLECTION_INTERVALS: Record<CollectionFrequency, number> = {
   ANUAL: 12,
 };
 
+export const MONTHLY_COLLECTION_FREQUENCIES = ["MENSUAL", "BIMESTRAL"] as const;
+
+export function isIncludedInMonthlyCollection(frequency: CollectionFrequency) {
+  return frequency === "MENSUAL" || frequency === "BIMESTRAL";
+}
+
 const DAY_MS = 86_400_000;
 
 type DateParts = { year: number; month: number; day: number };

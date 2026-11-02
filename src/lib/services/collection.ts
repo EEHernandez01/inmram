@@ -16,6 +16,7 @@ import {
   calculateReceiptTotal,
   currentCollectionDate,
   currentReceiptPeriod,
+  MONTHLY_COLLECTION_FREQUENCIES,
   receiptPeriodIsCoveredBy,
   receiptPeriodsOverlap,
   resolveReceiptOverlapStatus,
@@ -129,6 +130,7 @@ export async function sincronizarCobranzaSistema(now = new Date()) {
       estado: EstadoContrato.ACTIVO,
       fechaInicio: { lte: receiptPeriodEnd(period) },
       fechaFin: { gte: period },
+      periodicidadCobro: { in: [...MONTHLY_COLLECTION_FREQUENCIES] },
       unidad: { propiedad: { archivadaEn: null } },
     },
     select: {
@@ -221,15 +223,18 @@ export async function listarCobranzaMensual({
     ] } : {}),
   };
   const monthEnd = receiptPeriodEnd(period);
-  const receiptCoversMonth = { periodo: { lte: period }, periodoFin: { gte: period } };
   const receiptDueThisMonth = { fechaVencimiento: { gte: period, lte: monthEnd } };
-  const where = { OR: [receiptCoversMonth, receiptDueThisMonth], estatus: status, contrato: contractFilter };
-  const wherePrintable = { ...where, contrato: { ...contractFilter, formaPago: "EFECTIVO" as const } };
+  const collectionContractFilter = { ...contractFilter, periodicidadCobro: { in: [...MONTHLY_COLLECTION_FREQUENCIES] } };
+  const where = { ...receiptDueThisMonth, estatus: status, contrato: collectionContractFilter };
+  const wherePrintable = { ...where, contrato: { ...collectionContractFilter, formaPago: "EFECTIVO" as const } };
   const whereForSummary = {
     fechaVencimiento: { gte: period, lte: monthEnd },
-    contrato: ownerId ? { unidad: { propietarioId: ownerId } } : undefined,
+    contrato: {
+      periodicidadCobro: { in: [...MONTHLY_COLLECTION_FREQUENCIES] },
+      unidad: ownerId ? { propietarioId: ownerId } : undefined,
+    },
   };
-  const whereForCounts = { OR: [receiptCoversMonth, receiptDueThisMonth], contrato: contractFilter };
+  const whereForCounts = { ...receiptDueThisMonth, contrato: collectionContractFilter };
   const [total, groupedCounts, printableTotal] = pagination ? await Promise.all([
     prisma.recibo.count({ where }),
     prisma.recibo.groupBy({ by: ["estatus"], where: whereForCounts, _count: { _all: true } }),

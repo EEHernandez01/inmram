@@ -3,7 +3,7 @@ import "server-only";
 import { renderToBuffer } from "@react-pdf/renderer";
 
 import { getOwnerScope, READ_ROLES, requireSystemRole } from "@/lib/auth/authorization";
-import { calculateReceiptPaymentBalance, receiptPeriodEnd, receiptPeriodFromValue } from "@/lib/calculations/collection";
+import { calculateReceiptPaymentBalance, MONTHLY_COLLECTION_FREQUENCIES, receiptPeriodEnd, receiptPeriodFromValue } from "@/lib/calculations/collection";
 import { formatReceiptPeriodRange } from "@/lib/format";
 import { CollectionSummaryDocument } from "@/lib/pdf/collection-summary-document";
 import { prisma } from "@/lib/db/prisma";
@@ -14,11 +14,11 @@ export async function generarResumenCobranzaMensualPdf(periodValue: string) {
   const period = receiptPeriodFromValue(periodValue);
   const receipts = await prisma.recibo.findMany({
     where: {
-      OR: [
-        { periodo: { lte: period }, periodoFin: { gte: period } },
-        { fechaVencimiento: { gte: period, lte: receiptPeriodEnd(period) } },
-      ],
-      contrato: ownerId ? { unidad: { propietarioId: ownerId } } : undefined,
+      fechaVencimiento: { gte: period, lte: receiptPeriodEnd(period) },
+      contrato: {
+        periodicidadCobro: { in: [...MONTHLY_COLLECTION_FREQUENCIES] },
+        unidad: ownerId ? { propietarioId: ownerId } : undefined,
+      },
     },
     orderBy: [
       { fechaVencimiento: "asc" },
