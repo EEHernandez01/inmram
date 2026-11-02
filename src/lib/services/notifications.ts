@@ -5,7 +5,7 @@ import { requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
 import { calculateReceiptPaymentBalance, calculateReceiptTotal } from "@/lib/calculations/collection";
 import { prisma } from "@/lib/db/prisma";
 import { DomainError } from "@/lib/domain/errors";
-import { formatContractReceiptPeriodRange, formatCurrency, formatDate } from "@/lib/format";
+import { formatReceiptCoverageRange, formatCurrency, formatDate } from "@/lib/format";
 import { registrarAuditoria } from "@/lib/services/audit";
 import { recordIdSchema } from "@/lib/validation/foundation";
 
@@ -25,7 +25,7 @@ export async function enviarRecordatorioRecibo(receiptId: string) {
   const balance = calculateReceiptPaymentBalance({ total, payments: receipt.pagos.map((payment) => ({ amount: Number(payment.monto) })) });
   if (balance.saldoPendiente === 0) throw new DomainError("RECEIPT_SETTLED", "El recibo ya está liquidado.");
   const issuer = user.perfil?.razonSocial || user.perfil?.nombreCompleto || session.user.name || "Administración de rentas";
-  const receiptPeriod = formatContractReceiptPeriodRange(receipt.periodo, receipt.contrato.periodicidadCobro, receipt.contrato.fechaInicio, receipt.contrato.fechaFin);
+  const receiptPeriod = formatReceiptCoverageRange(receipt.periodoInicio, receipt.periodoFin);
   const response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json", "idempotency-key": `recibo-${id}-${new Date().toISOString().slice(0, 10)}`, "user-agent": "inmobiliaria-ramos-rosch/1.0" }, body: JSON.stringify({ from, to: [receipt.contrato.emailArrendatario], subject: `Recordatorio de renta ${receiptPeriod}`, text: `Hola ${receipt.contrato.arrendatario}:\n\n${issuer} te recuerda el recibo administrativo de ${receipt.contrato.unidad.propiedad.direccion}, unidad ${receipt.contrato.unidad.identificador}.\nPeriodo cubierto: ${receiptPeriod}\nFecha límite: ${formatDate(receipt.fechaVencimiento)}\nRenta: ${formatCurrency(receipt.monto)}\nTotal del recibo: ${formatCurrency(total)}\nPagado: ${formatCurrency(balance.montoPagado)}\nSaldo pendiente: ${formatCurrency(balance.saldoPendiente)}\nEstado: ${receipt.estatus}.\n\nEste mensaje no es un CFDI ni comprobante fiscal.` }) });
   if (!response.ok) throw new DomainError("EMAIL_PROVIDER_ERROR", "El proveedor de correo no pudo enviar el recordatorio.");
   const result = await response.json() as { id?: string };

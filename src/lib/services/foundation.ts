@@ -20,6 +20,7 @@ import {
   type CriterioCoincidenciaPropiedad,
 } from "@/lib/property-duplicates";
 import { registrarAuditoria } from "@/lib/services/audit";
+import { reconcileReceiptOverlaps } from "@/lib/services/collection";
 import { ubicacionParaUnificarSchema } from "@/lib/validation/property-merge";
 import { eliminarFotosBlob } from "@/lib/property-photos";
 import type { PropertyPhotoUpload } from "@/lib/validation/property-photos";
@@ -990,6 +991,7 @@ async function crearContratoEnTransaccion(
       data: {
         contratoId: contract.id,
         periodo: period,
+        periodoInicio: coverage.periodStart,
         periodoFin: coverage.periodEnd,
         fechaVencimiento: dueDate,
         monto: calculatePeriodicCharge(data.rentaMensualBase, coverage.months),
@@ -1058,9 +1060,10 @@ export async function actualizarContrato(
       const paidCents = receipt.pagos.reduce((sum, payment) => sum + Math.round(Number(payment.monto) * 100), 0);
       const paid = paidCents >= Math.round(Number(amount) * 100);
       const latestPayment = receipt.pagos[0];
-      const updatedReceipt = await tx.recibo.update({ where: { id: receipt.id }, data: { periodoFin: coverage.periodEnd, fechaVencimiento: dueDate, monto: amount, cargoFijo: 0, estatus: paid ? EstadoRecibo.PAGADO : calculateReceiptStatus({ currentDate: currentCollectionDate(), dueDate, paid: false }), fechaPago: paid ? latestPayment?.fechaPago ?? null : null, formaPago: paid ? latestPayment?.formaPago ?? null : null } });
-      await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "ACTUALIZAR_RECIBO_CONTRATO", entidad: "Recibo", entidadId: receipt.id, antes: { monto: receipt.monto.toString(), cargoFijo: receipt.cargoFijo.toString(), periodoFin: receipt.periodoFin.toISOString(), fechaVencimiento: receipt.fechaVencimiento.toISOString(), estatus: receipt.estatus }, despues: { monto: updatedReceipt.monto.toString(), cargoFijo: updatedReceipt.cargoFijo.toString(), periodoFin: updatedReceipt.periodoFin.toISOString(), fechaVencimiento: updatedReceipt.fechaVencimiento.toISOString(), estatus: updatedReceipt.estatus } });
+      const updatedReceipt = await tx.recibo.update({ where: { id: receipt.id }, data: { periodoInicio: coverage.periodStart, periodoFin: coverage.periodEnd, fechaVencimiento: dueDate, monto: amount, cargoFijo: 0, estatus: paid ? EstadoRecibo.PAGADO : calculateReceiptStatus({ currentDate: currentCollectionDate(), dueDate, paid: false }), fechaPago: paid ? latestPayment?.fechaPago ?? null : null, formaPago: paid ? latestPayment?.formaPago ?? null : null } });
+      await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "ACTUALIZAR_RECIBO_CONTRATO", entidad: "Recibo", entidadId: receipt.id, antes: { monto: receipt.monto.toString(), cargoFijo: receipt.cargoFijo.toString(), periodoInicio: receipt.periodoInicio.toISOString(), periodoFin: receipt.periodoFin.toISOString(), fechaVencimiento: receipt.fechaVencimiento.toISOString(), estatus: receipt.estatus }, despues: { monto: updatedReceipt.monto.toString(), cargoFijo: updatedReceipt.cargoFijo.toString(), periodoInicio: updatedReceipt.periodoInicio.toISOString(), periodoFin: updatedReceipt.periodoFin.toISOString(), fechaVencimiento: updatedReceipt.fechaVencimiento.toISOString(), estatus: updatedReceipt.estatus } });
     }
+    await reconcileReceiptOverlaps(tx, id, user.id);
     await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "ACTUALIZAR", entidad: "Contrato", entidadId: id, antes: { estado: before.estado, fechaInicio: before.fechaInicio.toISOString(), fechaFin: before.fechaFin.toISOString(), fechaProximoCobro: before.fechaProximoCobro?.toISOString() ?? null, periodicidadCobro: before.periodicidadCobro, formaPago: before.formaPago, rentaMensualBase: before.rentaMensualBase.toString(), diaPago: before.diaPago }, despues: { estado: updated.estado, fechaInicio: updated.fechaInicio.toISOString(), fechaFin: updated.fechaFin.toISOString(), fechaProximoCobro: nextCollectionDate.toISOString(), periodicidadCobro: updated.periodicidadCobro, formaPago: updated.formaPago, recibosEnRevision: reviewed.count, reciboActualizado: Boolean(receipt), rentaMensualBase: updated.rentaMensualBase.toString(), diaPago: updated.diaPago } });
     return updated;
   });

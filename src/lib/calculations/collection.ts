@@ -124,6 +124,34 @@ export function calculateReceiptCoverage(
   };
 }
 
+export function receiptPeriodsOverlap(
+  first: { periodStart: Date; periodEnd: Date },
+  second: { periodStart: Date; periodEnd: Date },
+) {
+  return first.periodStart <= second.periodEnd && second.periodStart <= first.periodEnd;
+}
+
+export function receiptPeriodIsCoveredBy(
+  period: { periodStart: Date; periodEnd: Date },
+  coveringPeriod: { periodStart: Date; periodEnd: Date },
+) {
+  return coveringPeriod.periodStart <= period.periodStart && coveringPeriod.periodEnd >= period.periodEnd;
+}
+
+export function resolveReceiptOverlapStatus({
+  fullyCoveredByPaidReceipt,
+  overlapsPaidReceipt,
+  overlapsUnsettledReceipt,
+}: {
+  fullyCoveredByPaidReceipt: boolean;
+  overlapsPaidReceipt: boolean;
+  overlapsUnsettledReceipt: boolean;
+}) {
+  if (fullyCoveredByPaidReceipt) return "OMITIDO" as const;
+  if (overlapsPaidReceipt || overlapsUnsettledReceipt) return "REVISION" as const;
+  return null;
+}
+
 export function calculatePeriodicCharge(monthlyAmount: number | string, months: number) {
   if (!Number.isInteger(months) || months < 1) throw new Error("El periodo del recibo no es válido.");
   const cents = Math.round(Number(monthlyAmount) * 100) * months;

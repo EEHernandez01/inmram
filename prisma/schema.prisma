@@ -275,6 +275,7 @@ model Recibo {
   id               String       @id @default(uuid()) @db.Uuid
   contratoId       String       @db.Uuid
   periodo          DateTime     @db.Date
+  periodoInicio    DateTime     @db.Date
   periodoFin       DateTime     @db.Date
   fechaVencimiento DateTime     @db.Date
   monto            Decimal      @db.Decimal(14, 2)

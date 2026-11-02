@@ -1,5 +1,3 @@
-import { calculateReceiptCoverage, collectionIntervalMonths, type CollectionFrequency } from "./calculations/collection.ts";
-
 type NumericValue = { toString(): string } | string | number;
 
 export function normalizeCurrencyInput(value: unknown) {
@@ -44,20 +42,8 @@ export function formatDateRange(start: Date, end: Date) {
   return `del ${date(start)} al ${date(end)}`;
 }
 
-export function formatContractReceiptPeriodRange(
-  period: Date,
-  frequency: CollectionFrequency,
-  contractStartDate: Date,
-  contractEndDate: Date,
-) {
-  const coverage = calculateReceiptCoverage(
-    period,
-    collectionIntervalMonths(frequency),
-    contractEndDate,
-    contractStartDate,
-  );
-  if (coverage.months === 0) return "Sin periodo cubierto";
-  return formatDateRange(coverage.periodStart, coverage.periodEnd);
+export function formatReceiptCoverageRange(periodStart: Date, periodEnd: Date) {
+  return formatDateRange(periodStart, periodEnd);
 }
 
 export function formatPercent(value: number) {

@@ -6,7 +6,7 @@ import { getOwnerScope, READ_ROLES, requireSystemRole } from "@/lib/auth/authori
 import { calculateReceiptDueDate, calculateReceiptTotal, receiptPeriodFromValue } from "@/lib/calculations/collection";
 import { prisma } from "@/lib/db/prisma";
 import { DomainError } from "@/lib/domain/errors";
-import { formatContractReceiptPeriodRange, formatCurrency } from "@/lib/format";
+import { formatReceiptCoverageRange, formatCurrency } from "@/lib/format";
 import { PaymentReceiptDocument } from "@/lib/pdf/payment-receipt-document";
 import { ReceiptDocument, ReceiptPage } from "@/lib/pdf/receipt-document";
 import { listarCobranzaMensual } from "@/lib/services/collection";
@@ -30,7 +30,7 @@ export async function generarReciboPdf(receiptId: string) {
     totalInWords: amountInWords(total),
     property: receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim(),
     unit: receipt.contrato.unidad.identificador,
-    rentalPeriod: formatContractReceiptPeriodRange(receipt.periodo, receipt.contrato.periodicidadCobro, receipt.contrato.fechaInicio, receipt.contrato.fechaFin),
+    rentalPeriod: formatReceiptCoverageRange(receipt.periodoInicio, receipt.periodoFin),
     issuedAt: formatLetterDate(calculateReceiptDueDate(receipt.periodo, receipt.contrato.diaPago)),
   };
   return renderToBuffer(<ReceiptDocument data={data} />);
@@ -77,7 +77,7 @@ export async function generarRecibosCobranzaPdf({
       totalInWords: amountInWords(total),
       property: receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim(),
       unit: receipt.contrato.unidad.identificador,
-      rentalPeriod: formatContractReceiptPeriodRange(receipt.periodo, receipt.contrato.periodicidadCobro, receipt.contrato.fechaInicio, receipt.contrato.fechaFin),
+      rentalPeriod: formatReceiptCoverageRange(receipt.periodoInicio, receipt.periodoFin),
       issuedAt: formatLetterDate(calculateReceiptDueDate(receipt.periodo, receipt.contrato.diaPago)),
     };
   });
@@ -131,6 +131,6 @@ export async function generarComprobantePagoPdf(receiptId: string) {
   const total = calculateReceiptTotal({ rent: Number(receipt.monto) });
   const issuer = user.perfil?.razonSocial || user.perfil?.nombreCompleto || session.user.name || "Administración de rentas";
   const property = receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim();
-  const data = { issuer, folio: receipt.id.slice(0, 8).toUpperCase(), tenant: receipt.contrato.arrendatario, concept: "renta", total: formatCurrency(total), totalInWords: amountInWords(total), property, unit: receipt.contrato.unidad.identificador, period: formatContractReceiptPeriodRange(receipt.periodo, receipt.contrato.periodicidadCobro, receipt.contrato.fechaInicio, receipt.contrato.fechaFin), paymentDate: formatReceiptPlaceAndDate(receipt.fechaPago) };
+  const data = { issuer, folio: receipt.id.slice(0, 8).toUpperCase(), tenant: receipt.contrato.arrendatario, concept: "renta", total: formatCurrency(total), totalInWords: amountInWords(total), property, unit: receipt.contrato.unidad.identificador, period: formatReceiptCoverageRange(receipt.periodoInicio, receipt.periodoFin), paymentDate: formatReceiptPlaceAndDate(receipt.fechaPago) };
   return renderToBuffer(<PaymentReceiptDocument data={data} />);
 }

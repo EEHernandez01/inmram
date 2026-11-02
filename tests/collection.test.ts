@@ -14,12 +14,15 @@ import {
   calculateReceiptTotal,
   contractOverlapsPeriod,
   currentReceiptPeriod,
+  receiptPeriodIsCoveredBy,
+  receiptPeriodsOverlap,
   receiptPeriodFromValue,
+  resolveReceiptOverlapStatus,
 } from "../src/lib/calculations/collection.ts";
 import { calculateInflationFromIndexLevels, calculateRenewedRent, expirationAlertLevel, isRenewalProposalWindow, renewalTermDates } from "../src/lib/calculations/inflation.ts";
 import { calculatePortfolioProfitability, calculateUnitProfitability } from "../src/lib/calculations/profitability.ts";
 import { calculateWaterConsumption } from "../src/lib/calculations/water.ts";
-import { formatContractReceiptPeriodRange } from "../src/lib/format.ts";
+import { formatReceiptCoverageRange } from "../src/lib/format.ts";
 
 test("un pago el día 31 de febrero vence el 1 de marzo", () => {
   const period = receiptPeriodFromValue("2026-02");
@@ -76,7 +79,7 @@ test("los periodos siguen los aniversarios del inicio del contrato", () => {
   assert.equal(monthly.periodStart.toISOString(), "2026-11-20T00:00:00.000Z");
   assert.equal(monthly.periodEnd.toISOString(), "2026-12-19T00:00:00.000Z");
   assert.equal(
-    formatContractReceiptPeriodRange(receiptPeriodFromValue("2026-11"), "MENSUAL", start, new Date("2027-11-14T00:00:00.000Z")),
+    formatReceiptCoverageRange(monthly.periodStart, monthly.periodEnd),
     "del 20 de noviembre de 2026 al 19 de diciembre de 2026",
   );
 
@@ -86,6 +89,21 @@ test("los periodos siguen los aniversarios del inicio del contrato", () => {
   assert.equal(semiannual.periodEnd.toISOString(), "2027-05-19T00:00:00.000Z");
   const annual = calculateReceiptCoverage(receiptPeriodFromValue("2026-11"), 12, null, start);
   assert.equal(annual.periodEnd.toISOString(), "2027-11-19T00:00:00.000Z");
+});
+
+test("los recibos detectan cobertura total y traslapes inclusivos", () => {
+  const existing = { periodStart: new Date("2026-10-06T00:00:00.000Z"), periodEnd: new Date("2027-01-05T00:00:00.000Z") };
+  const covered = { periodStart: new Date("2026-11-06T00:00:00.000Z"), periodEnd: new Date("2027-01-05T00:00:00.000Z") };
+  const partial = { periodStart: new Date("2027-01-05T00:00:00.000Z"), periodEnd: new Date("2027-02-04T00:00:00.000Z") };
+  const separate = { periodStart: new Date("2027-01-06T00:00:00.000Z"), periodEnd: new Date("2027-02-05T00:00:00.000Z") };
+
+  assert.equal(receiptPeriodIsCoveredBy(covered, existing), true);
+  assert.equal(receiptPeriodsOverlap(partial, existing), true);
+  assert.equal(receiptPeriodsOverlap(separate, existing), false);
+  assert.equal(resolveReceiptOverlapStatus({ fullyCoveredByPaidReceipt: true, overlapsPaidReceipt: true, overlapsUnsettledReceipt: false }), "OMITIDO");
+  assert.equal(resolveReceiptOverlapStatus({ fullyCoveredByPaidReceipt: false, overlapsPaidReceipt: true, overlapsUnsettledReceipt: false }), "REVISION");
+  assert.equal(resolveReceiptOverlapStatus({ fullyCoveredByPaidReceipt: false, overlapsPaidReceipt: false, overlapsUnsettledReceipt: true }), "REVISION");
+  assert.equal(resolveReceiptOverlapStatus({ fullyCoveredByPaidReceipt: false, overlapsPaidReceipt: false, overlapsUnsettledReceipt: false }), null);
 });
 
 test("el recibo de cada mes cubre desde el aniversario de ese mes al siguiente", () => {

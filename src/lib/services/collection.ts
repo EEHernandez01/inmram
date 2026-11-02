@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { Prisma } from "@/generated/prisma/client";
 import { EstadoContrato, EstadoRecibo } from "@/generated/prisma/enums";
 import { getOwnerScope, READ_ROLES, requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
 import {
@@ -15,6 +16,9 @@ import {
   calculateReceiptTotal,
   currentCollectionDate,
   currentReceiptPeriod,
+  receiptPeriodIsCoveredBy,
+  receiptPeriodsOverlap,
+  resolveReceiptOverlapStatus,
   receiptPeriodEnd,
 } from "@/lib/calculations/collection";
 import { prisma } from "@/lib/db/prisma";
@@ -64,6 +68,59 @@ export async function sincronizarCobranzaActual(now = new Date()) {
   return sincronizarCobranzaSistema(now);
 }
 
+const overlapReviewReason = "El periodo se traslapa con otro recibo del contrato.";
+const coveredByPaidReason = "El periodo ya está cubierto por un recibo pagado.";
+
+function isUnsettledReceipt(status: EstadoRecibo) {
+  return status === EstadoRecibo.PENDIENTE || status === EstadoRecibo.VENCIDO || status === EstadoRecibo.REVISION;
+}
+
+export async function reconcileReceiptOverlaps(tx: Prisma.TransactionClient, contractId: string, usuarioSistemaId: string | null = null) {
+  const receipts = await tx.recibo.findMany({
+    where: { contratoId: contractId },
+    orderBy: [{ periodoInicio: "asc" }, { periodo: "asc" }, { creadoEn: "asc" }, { id: "asc" }],
+    select: { id: true, periodo: true, periodoInicio: true, periodoFin: true, estatus: true, creadoEn: true },
+  });
+  const paidReceipts = receipts.filter((receipt) => receipt.estatus === EstadoRecibo.PAGADO);
+
+  for (const receipt of receipts) {
+    if (!isUnsettledReceipt(receipt.estatus)) continue;
+    const range = { periodStart: receipt.periodoInicio, periodEnd: receipt.periodoFin };
+    const paidCover = paidReceipts.find((paid) => paid.id !== receipt.id && receiptPeriodIsCoveredBy(range, { periodStart: paid.periodoInicio, periodEnd: paid.periodoFin }));
+    const overlappingPaid = paidReceipts.find((paid) => paid.id !== receipt.id && receiptPeriodsOverlap(range, { periodStart: paid.periodoInicio, periodEnd: paid.periodoFin }));
+    const earlierUnsettled = receipts.find((other) => {
+      if (other.id === receipt.id || !isUnsettledReceipt(other.estatus)) return false;
+      const earlier = other.periodoInicio < receipt.periodoInicio
+        || (other.periodoInicio.getTime() === receipt.periodoInicio.getTime() && other.periodo < receipt.periodo)
+        || (other.periodoInicio.getTime() === receipt.periodoInicio.getTime() && other.periodo.getTime() === receipt.periodo.getTime() && other.creadoEn <= receipt.creadoEn);
+      return earlier && receiptPeriodsOverlap(range, { periodStart: other.periodoInicio, periodEnd: other.periodoFin });
+    });
+
+    const overlapStatus = resolveReceiptOverlapStatus({
+      fullyCoveredByPaidReceipt: Boolean(paidCover),
+      overlapsPaidReceipt: Boolean(overlappingPaid),
+      overlapsUnsettledReceipt: Boolean(earlierUnsettled),
+    });
+    const nextStatus = overlapStatus ? EstadoRecibo[overlapStatus] : receipt.estatus;
+    if (nextStatus === receipt.estatus) continue;
+
+    await tx.recibo.update({ where: { id: receipt.id }, data: { estatus: nextStatus } });
+    await registrarAuditoria(tx, {
+      usuarioSistemaId,
+      accion: paidCover ? "OMITIR_RECIBO_CUBIERTO" : "ENVIAR_RECIBO_REVISION_TRASLAPE",
+      entidad: "Recibo",
+      entidadId: receipt.id,
+      antes: { estatus: receipt.estatus, periodoInicio: receipt.periodoInicio.toISOString(), periodoFin: receipt.periodoFin.toISOString() },
+      despues: {
+        estatus: nextStatus,
+        motivo: paidCover ? coveredByPaidReason : overlapReviewReason,
+        reciboRelacionadoId: paidCover?.id ?? overlappingPaid?.id ?? earlierUnsettled?.id ?? null,
+      },
+    });
+    receipt.estatus = nextStatus;
+  }
+}
+
 export async function sincronizarCobranzaSistema(now = new Date()) {
   const period = currentReceiptPeriod(now);
   const currentDate = currentCollectionDate(now);
@@ -71,10 +128,7 @@ export async function sincronizarCobranzaSistema(now = new Date()) {
     where: {
       estado: EstadoContrato.ACTIVO,
       fechaInicio: { lte: receiptPeriodEnd(period) },
-      AND: [
-        { OR: [{ fechaProximoCobro: null }, { fechaProximoCobro: { lte: receiptPeriodEnd(period) } }] },
-        { fechaFin: { gte: period } },
-      ],
+      fechaFin: { gte: period },
       unidad: { propiedad: { archivadaEn: null } },
     },
     select: {
@@ -88,31 +142,35 @@ export async function sincronizarCobranzaSistema(now = new Date()) {
     },
   });
 
-  const receiptData = contracts.map((contract) => ({
-    contract,
-    firstCollectionDate: contract.fechaProximoCobro ?? calculateContractFirstCollectionDate(contract.fechaInicio, contract.diaPago),
-  })).filter(({ contract, firstCollectionDate }) => collectionPeriodIsEligible(period, firstCollectionDate, collectionIntervalMonths(contract.periodicidadCobro))).map(({ contract, firstCollectionDate }) => {
-      const dueDate = calculateContractReceiptDueDate(period, contract.diaPago, firstCollectionDate);
+  let createdCount = 0;
+  for (const contract of contracts) {
+    await prisma.$transaction(async (tx) => {
+      await reconcileReceiptOverlaps(tx, contract.id);
+      const firstCollectionDate = contract.fechaProximoCobro ?? calculateContractFirstCollectionDate(contract.fechaInicio, contract.diaPago);
       const intervalMonths = collectionIntervalMonths(contract.periodicidadCobro);
-      const coverage = calculateReceiptCoverage(period, intervalMonths, contract.fechaFin, contract.fechaInicio);
-      if (coverage.months === 0 || coverage.periodEnd < period) return null;
-      return {
-        contratoId: contract.id,
-        periodo: period,
-        periodoFin: coverage.periodEnd,
-        fechaVencimiento: dueDate,
-        monto: calculatePeriodicCharge(contract.rentaMensualBase.toString(), coverage.months),
-        estatus: calculateReceiptStatus({
-          currentDate,
-          dueDate,
-          paid: false,
-        }),
-      };
-    }).filter((receipt): receipt is NonNullable<typeof receipt> => receipt !== null);
+      if (!collectionPeriodIsEligible(period, firstCollectionDate, intervalMonths)) return;
 
-  const created = receiptData.length
-    ? await prisma.recibo.createMany({ data: receiptData, skipDuplicates: true })
-    : { count: 0 };
+      const dueDate = calculateContractReceiptDueDate(period, contract.diaPago, firstCollectionDate);
+      const coverage = calculateReceiptCoverage(period, intervalMonths, contract.fechaFin, contract.fechaInicio);
+      if (coverage.months === 0 || coverage.periodEnd < period) return;
+      const existing = await tx.recibo.findUnique({ where: { contratoId_periodo: { contratoId: contract.id, periodo: period } }, select: { id: true } });
+      if (existing) return;
+
+      await tx.recibo.create({
+        data: {
+          contratoId: contract.id,
+          periodo: period,
+          periodoInicio: coverage.periodStart,
+          periodoFin: coverage.periodEnd,
+          fechaVencimiento: dueDate,
+          monto: calculatePeriodicCharge(contract.rentaMensualBase.toString(), coverage.months),
+          estatus: calculateReceiptStatus({ currentDate, dueDate, paid: false }),
+        },
+      });
+      createdCount += 1;
+      await reconcileReceiptOverlaps(tx, contract.id);
+    });
+  }
 
   const expired = await prisma.recibo.updateMany({
     where: {
@@ -134,7 +192,7 @@ export async function sincronizarCobranzaSistema(now = new Date()) {
 
   return {
     periodo: period,
-    creados: created.count,
+    creados: createdCount,
     actualizadosVencidos: expired.count,
   };
 }
