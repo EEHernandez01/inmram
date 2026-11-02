@@ -18,6 +18,10 @@ export async function POST(request: Request) {
     target.searchParams.set("actualizados", String(result.actualizadosVencidos));
     return NextResponse.redirect(target, 303);
   } catch (error) {
+    const details = error instanceof Error
+      ? { name: error.name, message: error.message, code: "code" in error ? error.code : undefined }
+      : { name: "UnknownError", message: String(error) };
+    console.error("[cobranza] Error al generar o actualizar cobranza", details);
     const target = new URL("/cobranza", requestUrl);
     target.searchParams.set("error", safeRouteError(error));
     return NextResponse.redirect(target, 303);
