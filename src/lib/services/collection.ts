@@ -19,6 +19,7 @@ import {
   MONTHLY_COLLECTION_FREQUENCIES,
   receiptPeriodIsCoveredBy,
   receiptPeriodsOverlap,
+  receiptPeriodValue,
   resolveReceiptOverlapStatus,
   receiptPeriodEnd,
 } from "@/lib/calculations/collection";
@@ -153,6 +154,7 @@ export async function sincronizarCobranzaSistema(now = new Date()) {
       if (!collectionPeriodIsEligible(period, firstCollectionDate, intervalMonths)) return;
 
       const dueDate = calculateContractReceiptDueDate(period, contract.diaPago, firstCollectionDate);
+      if (receiptPeriodValue(dueDate) !== receiptPeriodValue(period)) return;
       const coverage = calculateReceiptCoverage(period, intervalMonths, contract.fechaFin, contract.fechaInicio);
       if (coverage.months === 0 || coverage.periodEnd < period) return;
       const existing = await tx.recibo.findUnique({ where: { contratoId_periodo: { contratoId: contract.id, periodo: period } }, select: { id: true } });
