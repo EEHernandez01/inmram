@@ -40,7 +40,7 @@ export function ReceiptPrintControls({
       {search ? <input name="buscar" type="hidden" value={search} /> : null}
       <button className="inline-flex min-h-10 items-center justify-center gap-2 rounded-card bg-brand px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50" disabled={total === 0} name="modo" type="submit" value="todos">
         <svg aria-hidden="true" className="size-4" fill="none" viewBox="0 0 24 24"><path d="M7 8V3h10v5M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2m-10-4h10v8H7z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" /></svg>
-        Solicitudes de pago en efectivo ({total})
+        Imprimir solicitudes de pago ({total})
       </button>
       <a className="inline-flex min-h-10 items-center justify-center rounded-card border border-border bg-surface px-4 py-2 text-sm font-semibold text-brand transition-colors hover:bg-bg" href={`/api/cobranza/resumen?periodo=${encodeURIComponent(periodValue)}`} rel="noreferrer" target="_blank">Hoja resumen</a>
       <details className="relative">

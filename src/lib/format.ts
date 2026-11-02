@@ -1,3 +1,5 @@
+import { calculateContractFirstCollectionDate, calculateReceiptCoverage, collectionIntervalMonths, type CollectionFrequency } from "./calculations/collection.ts";
+
 type NumericValue = { toString(): string } | string | number;
 
 export function normalizeCurrencyInput(value: unknown) {
@@ -30,6 +32,35 @@ export function formatReceiptPeriodRange(start: Date, end: Date) {
   return start.getUTCFullYear() === end.getUTCFullYear() && start.getUTCMonth() === end.getUTCMonth()
     ? monthYear(start)
     : `${monthYear(start)} – ${monthYear(end)}`;
+}
+
+export function formatDateRange(start: Date, end: Date) {
+  const date = (value: Date) => new Intl.DateTimeFormat("es-MX", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(value);
+  return `del ${date(start)} al ${date(end)}`;
+}
+
+export function formatContractReceiptPeriodRange(
+  period: Date,
+  frequency: CollectionFrequency,
+  contractStartDate: Date,
+  contractEndDate: Date,
+  firstCollectionDate: Date | null,
+  paymentDay: number,
+) {
+  const firstPeriodDate = firstCollectionDate ?? calculateContractFirstCollectionDate(contractStartDate, paymentDay);
+  const coverage = calculateReceiptCoverage(
+    period,
+    collectionIntervalMonths(frequency),
+    contractEndDate,
+    contractStartDate,
+    firstPeriodDate,
+  );
+  return formatDateRange(coverage.periodStart, coverage.periodEnd);
 }
 
 export function formatPercent(value: number) {

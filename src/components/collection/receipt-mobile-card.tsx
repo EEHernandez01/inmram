@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { formatCurrency, formatDate, formatReceiptPeriodRange } from "@/lib/format";
+import { formatContractReceiptPeriodRange, formatCurrency, formatDate } from "@/lib/format";
 
 import { ReceiptAction, ReceiptDocuments } from "./receipt-actions";
 import { ReceiptBadge } from "./receipt-badge";
@@ -36,7 +36,7 @@ export function ReceiptMobileCard({
       <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
         <div className="col-span-2">
           <dt className="text-sm font-semibold text-ink-secondary">Periodo</dt>
-          <dd className="mt-1 text-base text-ink">{formatReceiptPeriodRange(receipt.periodo, receipt.periodoFin)}</dd>
+          <dd className="mt-1 text-base text-ink">{formatContractReceiptPeriodRange(receipt.periodo, receipt.contrato.periodicidadCobro, receipt.contrato.fechaInicio, receipt.contrato.fechaFin, receipt.contrato.fechaProximoCobro, receipt.contrato.diaPago)}</dd>
         </div>
         <div>
           <dt className="text-sm font-semibold text-ink-secondary">Fecha límite</dt>

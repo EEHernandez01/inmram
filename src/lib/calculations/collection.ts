@@ -69,16 +69,51 @@ export function collectionPeriodIsEligible(period: Date, firstCollectionDate: Da
   return monthOffset >= 0 && monthOffset % intervalMonths === 0;
 }
 
-export function calculateReceiptCoverage(period: Date, intervalMonths: number, contractEndDate?: Date | null) {
+function addMonthsOnContractAnniversary(anchorDate: Date, monthOffset: number) {
+  const targetMonth = anchorDate.getUTCFullYear() * 12 + anchorDate.getUTCMonth() + monthOffset;
+  const year = Math.floor(targetMonth / 12);
+  const month = targetMonth % 12;
+  const day = Math.min(anchorDate.getUTCDate(), new Date(Date.UTC(year, month + 1, 0)).getUTCDate());
+  return new Date(Date.UTC(year, month, day));
+}
+
+export function calculateReceiptCoverage(
+  period: Date,
+  intervalMonths: number,
+  contractEndDate?: Date | null,
+  contractStartDate?: Date | null,
+  firstCollectionDate?: Date | null,
+) {
   if (!Number.isInteger(intervalMonths) || intervalMonths < 1) throw new Error("La periodicidad de cobro no es válida.");
-  const startMonth = period.getUTCFullYear() * 12 + period.getUTCMonth();
+  if (!contractStartDate) {
+    const startMonth = period.getUTCFullYear() * 12 + period.getUTCMonth();
+    const contractEndMonth = contractEndDate
+      ? contractEndDate.getUTCFullYear() * 12 + contractEndDate.getUTCMonth()
+      : startMonth + intervalMonths - 1;
+    const months = Math.max(1, Math.min(intervalMonths, contractEndMonth - startMonth + 1));
+    return {
+      months,
+      periodStart: period,
+      periodEnd: new Date(Date.UTC(period.getUTCFullYear(), period.getUTCMonth() + months, 0)),
+    };
+  }
+  const anchorDate = contractStartDate;
+  const collectionAnchor = firstCollectionDate ?? anchorDate;
+  const monthOffset = (period.getUTCFullYear() - collectionAnchor.getUTCFullYear()) * 12
+    + period.getUTCMonth() - collectionAnchor.getUTCMonth();
+  const cycleOffset = Math.max(0, Math.floor(monthOffset / intervalMonths)) * intervalMonths;
+  const periodStart = addMonthsOnContractAnniversary(anchorDate, cycleOffset);
+  const unboundedEnd = addMonthsOnContractAnniversary(anchorDate, cycleOffset + intervalMonths);
+  const periodEnd = contractEndDate && contractEndDate < unboundedEnd ? contractEndDate : unboundedEnd;
+  const periodMonth = period.getUTCFullYear() * 12 + period.getUTCMonth();
   const contractEndMonth = contractEndDate
     ? contractEndDate.getUTCFullYear() * 12 + contractEndDate.getUTCMonth()
-    : startMonth + intervalMonths - 1;
-  const months = Math.max(1, Math.min(intervalMonths, contractEndMonth - startMonth + 1));
+    : periodMonth + intervalMonths - 1;
+  const months = Math.max(1, Math.min(intervalMonths, contractEndMonth - periodMonth + 1));
   return {
     months,
-    periodEnd: new Date(Date.UTC(period.getUTCFullYear(), period.getUTCMonth() + months, 0)),
+    periodStart,
+    periodEnd,
   };
 }
 

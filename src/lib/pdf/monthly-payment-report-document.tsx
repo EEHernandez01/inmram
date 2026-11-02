@@ -1,6 +1,6 @@
 import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 
-import { formatCurrency, formatDate, formatReceiptPeriodRange } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateRange } from "@/lib/format";
 
 type ReportPayment = {
   id: string;
@@ -66,7 +66,7 @@ export function MonthlyPaymentReportDocument({ data }: { data: { month: string; 
         {tenant.payments.map((payment) => <View key={payment.id} style={styles.row} wrap={false}>
           <Text style={[styles.colDate, payment.reversedAt ? styles.reversed : {}]}>{formatDate(payment.paymentDate)}{payment.reversedAt ? " · REVERTIDO" : ""}</Text>
           <Text style={[styles.colProperty, payment.reversedAt ? styles.reversed : {}]}>{payment.property} · {payment.unit}</Text>
-          <Text style={[styles.colPeriod, payment.reversedAt ? styles.reversed : {}]}>{formatReceiptPeriodRange(payment.period, payment.periodEnd)}</Text>
+          <Text style={[styles.colPeriod, payment.reversedAt ? styles.reversed : {}]}>{formatDateRange(payment.period, payment.periodEnd)}</Text>
           <Text style={[styles.colMethod, payment.reversedAt ? styles.reversed : {}]}>{methodName(payment.method)}{payment.reference ? ` · ${payment.reference}` : ""}</Text>
           <Text style={[styles.colAmount, payment.reversedAt ? styles.reversed : {}]}>{formatCurrency(payment.amount)}</Text>
           <Text style={styles.colBalance}>{payment.showBalance ? formatCurrency(payment.currentBalance) : ""}</Text>

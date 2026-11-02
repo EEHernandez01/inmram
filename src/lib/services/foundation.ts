@@ -983,7 +983,7 @@ async function crearContratoEnTransaccion(
     nextCollectionDate.getTime() >= period.getTime()
   ) {
     const dueDate = new Date(nextCollectionDate);
-    const coverage = calculateReceiptCoverage(period, collectionIntervalMonths(data.periodicidadCobro), endDate);
+    const coverage = calculateReceiptCoverage(period, collectionIntervalMonths(data.periodicidadCobro), endDate, startDate, nextCollectionDate);
     await transaction.recibo.create({
       data: {
         contratoId: contract.id,
@@ -1050,7 +1050,7 @@ export async function actualizarContrato(
     for (const receipt of receiptsBeforeReview) await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "ENVIAR_A_REVISION", entidad: "Recibo", entidadId: receipt.id, antes: { estatus: receipt.estatus }, despues: { estatus: EstadoRecibo.REVISION, contratoId: id } });
     const receipt = collectionPeriodIsEligible(period, nextCollectionDate, collectionIntervalMonths(updated.periodicidadCobro)) ? await tx.recibo.findFirst({ where: { contratoId: id, periodo: period, estatus: { notIn: [EstadoRecibo.PAGADO, EstadoRecibo.OMITIDO, EstadoRecibo.REVISION] } }, include: { pagos: { where: { anuladoEn: null }, orderBy: { fechaPago: "desc" } } } }) : null;
     if (receipt) {
-      const coverage = calculateReceiptCoverage(period, collectionIntervalMonths(updated.periodicidadCobro), updated.fechaFin);
+      const coverage = calculateReceiptCoverage(period, collectionIntervalMonths(updated.periodicidadCobro), updated.fechaFin, updated.fechaInicio, nextCollectionDate);
       const dueDate = calculateContractReceiptDueDate(period, updated.diaPago, nextCollectionDate);
       const amount = calculatePeriodicCharge(updated.rentaMensualBase.toString(), coverage.months);
       const paidCents = receipt.pagos.reduce((sum, payment) => sum + Math.round(Number(payment.monto) * 100), 0);

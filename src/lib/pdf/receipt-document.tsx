@@ -10,7 +10,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 66,
     paddingTop: 120,
   },
-  date: { fontSize: 12, marginTop: 24, textAlign: "right" },
+  date: { fontSize: 12, marginTop: 36, textAlign: "right" },
   content: { flexGrow: 1, justifyContent: "center" },
   paragraph: { fontSize: 13, lineHeight: 1.55, textAlign: "justify" },
   emphasis: { fontFamily: "Helvetica-Bold" },
@@ -48,7 +48,7 @@ export function ReceiptPage({ data }: { data: ReceiptPdfData }) {
           <Text style={styles.salutation}>ATENTAMENTE</Text>
           <View style={styles.signatureSpace} />
           <Text style={styles.signer}>{data.owner}</Text>
-          <Text style={styles.signerRole}>Dueño</Text>
+          <Text style={styles.signerRole}>Administrador</Text>
         </View>
       </View>
     </Page>;

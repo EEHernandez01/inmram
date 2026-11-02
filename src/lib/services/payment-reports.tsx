@@ -3,7 +3,7 @@ import "server-only";
 import { renderToBuffer } from "@react-pdf/renderer";
 
 import { getOwnerScope, REPORT_ROLES, requireSystemRole } from "@/lib/auth/authorization";
-import { calculateReceiptPaymentBalance, currentReceiptPeriod, receiptPeriodEnd, receiptPeriodFromValue, receiptPeriodValue } from "@/lib/calculations/collection";
+import { calculateReceiptPaymentBalance, calculateReceiptCoverage, collectionIntervalMonths, currentReceiptPeriod, receiptPeriodEnd, receiptPeriodFromValue, receiptPeriodValue } from "@/lib/calculations/collection";
 import { formatReceiptPeriodRange } from "@/lib/format";
 import { MonthlyPaymentReportDocument } from "@/lib/pdf/monthly-payment-report-document";
 import { prisma } from "@/lib/db/prisma";
@@ -50,6 +50,11 @@ export async function obtenerReportePagosMensual(input: unknown = {}) {
             contrato: {
               select: {
                 arrendatario: true,
+                fechaInicio: true,
+                fechaFin: true,
+                periodicidadCobro: true,
+                fechaProximoCobro: true,
+                diaPago: true,
                 unidad: { select: { id: true, identificador: true, propiedad: { select: { direccion: true } } } },
               },
             },
@@ -76,6 +81,13 @@ export async function obtenerReportePagosMensual(input: unknown = {}) {
       total: Number(receipt.monto),
       payments: receipt.pagos.map((item) => ({ amount: Number(item.monto), reversed: Boolean(item.anuladoEn) })),
     });
+    const coverage = calculateReceiptCoverage(
+      receipt.periodo,
+      collectionIntervalMonths(receipt.contrato.periodicidadCobro),
+      receipt.contrato.fechaFin,
+      receipt.contrato.fechaInicio,
+      receipt.contrato.fechaProximoCobro,
+    );
     return {
       id: payment.id,
       receiptId: payment.reciboId,
@@ -83,8 +95,8 @@ export async function obtenerReportePagosMensual(input: unknown = {}) {
       property: receipt.contrato.unidad.propiedad.direccion,
       unit: receipt.contrato.unidad.identificador,
       unitId: receipt.contrato.unidad.id,
-      period: receipt.periodo,
-      periodEnd: receipt.periodoFin,
+      period: coverage.periodStart,
+      periodEnd: coverage.periodEnd,
       paymentDate: payment.fechaPago,
       amount: Number(payment.monto),
       method: payment.formaPago,

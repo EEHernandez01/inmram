@@ -6,7 +6,7 @@ import { getOwnerScope, READ_ROLES, requireSystemRole } from "@/lib/auth/authori
 import { calculateReceiptDueDate, calculateReceiptTotal, receiptPeriodFromValue } from "@/lib/calculations/collection";
 import { prisma } from "@/lib/db/prisma";
 import { DomainError } from "@/lib/domain/errors";
-import { formatCurrency, formatReceiptPeriodRange } from "@/lib/format";
+import { formatContractReceiptPeriodRange, formatCurrency } from "@/lib/format";
 import { PaymentReceiptDocument } from "@/lib/pdf/payment-receipt-document";
 import { ReceiptDocument, ReceiptPage } from "@/lib/pdf/receipt-document";
 import { listarCobranzaMensual } from "@/lib/services/collection";
@@ -30,7 +30,7 @@ export async function generarReciboPdf(receiptId: string) {
     totalInWords: amountInWords(total),
     property: receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim(),
     unit: receipt.contrato.unidad.identificador,
-    rentalPeriod: formatRentalPeriod(receipt.periodo, receipt.periodoFin),
+    rentalPeriod: formatContractReceiptPeriodRange(receipt.periodo, receipt.contrato.periodicidadCobro, receipt.contrato.fechaInicio, receipt.contrato.fechaFin, receipt.contrato.fechaProximoCobro, receipt.contrato.diaPago),
     issuedAt: formatLetterDate(calculateReceiptDueDate(receipt.periodo, receipt.contrato.diaPago)),
   };
   return renderToBuffer(<ReceiptDocument data={data} />);
@@ -55,12 +55,19 @@ export async function generarRecibosCobranzaPdf({
     receipt.contrato.formaPago === "EFECTIVO" && (!selectedIds || selectedIds.has(receipt.id))
   );
   if (included.length === 0) throw new DomainError("NOT_FOUND", "No hay recibos para imprimir con los criterios seleccionados.");
+  const orderedReceipts = [...included].sort((a, b) => {
+    const dueDateDifference = calculateReceiptDueDate(a.periodo, a.contrato.diaPago).getTime()
+      - calculateReceiptDueDate(b.periodo, b.contrato.diaPago).getTime();
+    if (dueDateDifference) return dueDateDifference;
+    const propertyDifference = a.contrato.unidad.propiedad.direccion.localeCompare(b.contrato.unidad.propiedad.direccion, "es-MX", { sensitivity: "base", numeric: true });
+    return propertyDifference || a.contrato.unidad.identificador.localeCompare(b.contrato.unidad.identificador, "es-MX", { sensitivity: "base", numeric: true });
+  });
 
   const issuer = user.perfil?.razonSocial || user.perfil?.nombreCompleto || session.user.name || "Administración de rentas";
-  const ownerIds = [...new Set(included.map((receipt) => receipt.contrato.unidad.propietarioId))];
+  const ownerIds = [...new Set(orderedReceipts.map((receipt) => receipt.contrato.unidad.propietarioId))];
   const owners = await prisma.propietario.findMany({ where: { id: { in: ownerIds } }, select: { id: true, nombre: true } });
   const ownerNames = new Map(owners.map((owner) => [owner.id, owner.nombre]));
-  const pages = included.map((receipt) => {
+  const pages = orderedReceipts.map((receipt) => {
     const total = calculateReceiptTotal({ rent: Number(receipt.monto) });
     return {
       issuer,
@@ -70,11 +77,11 @@ export async function generarRecibosCobranzaPdf({
       totalInWords: amountInWords(total),
       property: receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim(),
       unit: receipt.contrato.unidad.identificador,
-      rentalPeriod: formatRentalPeriod(receipt.periodo, receipt.periodoFin),
+      rentalPeriod: formatContractReceiptPeriodRange(receipt.periodo, receipt.contrato.periodicidadCobro, receipt.contrato.fechaInicio, receipt.contrato.fechaFin, receipt.contrato.fechaProximoCobro, receipt.contrato.diaPago),
       issuedAt: formatLetterDate(calculateReceiptDueDate(receipt.periodo, receipt.contrato.diaPago)),
     };
   });
-  return renderToBuffer(<Document title="Recibos de cobranza" author={issuer}>{pages.map((data, index) => <ReceiptPage data={data} key={`${included[index].id}-${index}`} />)}</Document>);
+  return renderToBuffer(<Document title="Recibos de cobranza" author={issuer}>{pages.map((data, index) => <ReceiptPage data={data} key={`${orderedReceipts[index].id}-${index}`} />)}</Document>);
 }
 
 function amountInWords(value: number) {
@@ -103,11 +110,6 @@ function amountInWords(value: number) {
   return `${pesoWords.toUpperCase()} PESOS ${String(cents).padStart(2, "0")}/100 M.N.`;
 }
 
-function formatRentalPeriod(start: Date, end: Date) {
-  const date = (value: Date) => new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" }).format(value);
-  return `del ${date(start)} al ${date(end)}`;
-}
-
 function formatLetterDate(value: Date) {
   const day = String(value.getUTCDate()).padStart(2, "0");
   const monthName = new Intl.DateTimeFormat("es-MX", { month: "long", timeZone: "UTC" }).format(value);
@@ -129,6 +131,6 @@ export async function generarComprobantePagoPdf(receiptId: string) {
   const total = calculateReceiptTotal({ rent: Number(receipt.monto) });
   const issuer = user.perfil?.razonSocial || user.perfil?.nombreCompleto || session.user.name || "Administración de rentas";
   const property = receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim();
-  const data = { issuer, folio: receipt.id.slice(0, 8).toUpperCase(), tenant: receipt.contrato.arrendatario, concept: "renta", total: formatCurrency(total), totalInWords: amountInWords(total), property, unit: receipt.contrato.unidad.identificador, period: formatReceiptPeriodRange(receipt.periodo, receipt.periodoFin), paymentDate: formatReceiptPlaceAndDate(receipt.fechaPago) };
+  const data = { issuer, folio: receipt.id.slice(0, 8).toUpperCase(), tenant: receipt.contrato.arrendatario, concept: "renta", total: formatCurrency(total), totalInWords: amountInWords(total), property, unit: receipt.contrato.unidad.identificador, period: formatContractReceiptPeriodRange(receipt.periodo, receipt.contrato.periodicidadCobro, receipt.contrato.fechaInicio, receipt.contrato.fechaFin, receipt.contrato.fechaProximoCobro, receipt.contrato.diaPago), paymentDate: formatReceiptPlaceAndDate(receipt.fechaPago) };
   return renderToBuffer(<PaymentReceiptDocument data={data} />);
 }

@@ -1,7 +1,7 @@
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { PrintReportButton } from "@/components/reports/print-report-button";
-import { formatCurrency, formatDate, formatReceiptPeriodRange } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateRange } from "@/lib/format";
 import { obtenerReportePagosMensual } from "@/lib/services/payment-reports";
 
 function queryString(filters: Record<string, string>) {
@@ -51,7 +51,7 @@ export default async function MonthlyPaymentsReportPage({
             <tbody className="divide-y divide-border">{group.payments.map((payment) => <tr className={payment.reversedAt ? "text-danger" : "text-ink"} key={payment.id}>
               <td className={payment.reversedAt ? "px-4 py-3 line-through" : "px-4 py-3"}>{formatDate(payment.paymentDate)}{payment.reversedAt ? <span className="ml-1 font-semibold no-underline">· Revertido</span> : null}</td>
               <td className="px-4 py-3">{payment.property} · {payment.unit}</td>
-              <td className="px-4 py-3">{formatReceiptPeriodRange(payment.period, payment.periodEnd)}</td>
+              <td className="px-4 py-3">{formatDateRange(payment.period, payment.periodEnd)}</td>
               <td className="px-4 py-3">{payment.method === "EFECTIVO" ? "Efectivo" : "Transferencia"}{payment.reference ? ` · ${payment.reference}` : ""}</td>
               <td className="px-4 py-3 text-right font-semibold [font-variant-numeric:tabular-nums]">{formatCurrency(payment.amount)}</td>
               <td className="px-4 py-3 text-right [font-variant-numeric:tabular-nums]">{payment.showBalance ? formatCurrency(payment.currentBalance) : ""}</td>
