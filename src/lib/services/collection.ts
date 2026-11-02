@@ -165,15 +165,17 @@ export async function listarCobranzaMensual({
   const receiptCoversMonth = { periodo: { lte: period }, periodoFin: { gte: period } };
   const receiptDueThisMonth = { fechaVencimiento: { gte: period, lte: monthEnd } };
   const where = { OR: [receiptCoversMonth, receiptDueThisMonth], estatus: status, contrato: contractFilter };
+  const wherePrintable = { ...where, contrato: { ...contractFilter, formaPago: "EFECTIVO" as const } };
   const whereForSummary = {
     fechaVencimiento: { gte: period, lte: monthEnd },
     contrato: ownerId ? { unidad: { propietarioId: ownerId } } : undefined,
   };
   const whereForCounts = { OR: [receiptCoversMonth, receiptDueThisMonth], contrato: contractFilter };
-  const [total, groupedCounts] = pagination ? await Promise.all([
+  const [total, groupedCounts, printableTotal] = pagination ? await Promise.all([
     prisma.recibo.count({ where }),
     prisma.recibo.groupBy({ by: ["estatus"], where: whereForCounts, _count: { _all: true } }),
-  ]) : [undefined, undefined];
+    prisma.recibo.count({ where: wherePrintable }),
+  ]) : [undefined, undefined, undefined];
   const paginas = pagination ? Math.max(1, Math.ceil((total ?? 0) / pagination.limite)) : 1;
   const pagina = pagination ? Math.min(Math.max(1, pagination.pagina), paginas) : 1;
   const receipts = await prisma.recibo.findMany({
@@ -245,7 +247,7 @@ export async function listarCobranzaMensual({
       revision: groupedCounts?.find((group) => group.estatus === EstadoRecibo.REVISION)?._count._all ?? 0,
       omitidos: groupedCounts?.find((group) => group.estatus === EstadoRecibo.OMITIDO)?._count._all ?? 0,
     } : undefined,
-    pagination: pagination ? { pagina, paginas, total: total ?? 0 } : undefined,
+    pagination: pagination ? { pagina, paginas, total: total ?? 0, totalImprimible: printableTotal ?? 0 } : undefined,
   };
 }
 
@@ -276,6 +278,7 @@ export async function registrarPagoRecibo(
     });
     if (!receipt) throw new DomainError("NOT_FOUND", "El recibo no existe.");
     if (receipt.contrato.unidad.propiedad.archivadaEn) throw new DomainError("PROPERTY_ARCHIVED", "La propiedad está archivada y es de solo consulta.");
+    if (data.formaPago !== receipt.contrato.formaPago) throw new DomainError("PAYMENT_METHOD_MISMATCH", "La forma de pago debe coincidir con la establecida en el contrato.");
 
     const summary = receiptPaymentSummary(receipt);
     const paymentCents = cents(data.monto);

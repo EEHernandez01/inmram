@@ -19,6 +19,7 @@ export async function generarReciboPdf(receiptId: string) {
   const id = recordIdSchema.parse(receiptId);
   const receipt = await prisma.recibo.findFirst({ where: { id, contrato: ownerId ? { unidad: { propietarioId: ownerId } } : undefined }, include: { contrato: { include: { unidad: { include: { propiedad: true, propietario: true } } } } } });
   if (!receipt) throw new DomainError("NOT_FOUND", "El recibo no existe.");
+  if (receipt.contrato.formaPago === "TRANSFERENCIA") throw new DomainError("PAYMENT_REQUEST_UNAVAILABLE", "Los contratos con pago por transferencia no tienen solicitud de pago en PDF.");
   const total = calculateReceiptTotal({ rent: Number(receipt.monto) });
   const issuer = user.perfil?.razonSocial || user.perfil?.nombreCompleto || session.user.name || "Administración de rentas";
   const data = {
@@ -50,7 +51,9 @@ export async function generarRecibosCobranzaPdf({
   const period = receiptPeriodFromValue(periodValue);
   const { receipts } = await listarCobranzaMensual({ period, status, search });
   const selectedIds = ids ? new Set(ids.map((id) => recordIdSchema.parse(id))) : null;
-  const included = selectedIds ? receipts.filter((receipt) => selectedIds.has(receipt.id)) : receipts;
+  const included = receipts.filter((receipt) =>
+    receipt.contrato.formaPago === "EFECTIVO" && (!selectedIds || selectedIds.has(receipt.id))
+  );
   if (included.length === 0) throw new DomainError("NOT_FOUND", "No hay recibos para imprimir con los criterios seleccionados.");
 
   const issuer = user.perfil?.razonSocial || user.perfil?.nombreCompleto || session.user.name || "Administración de rentas";

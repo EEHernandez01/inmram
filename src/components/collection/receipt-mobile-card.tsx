@@ -23,7 +23,7 @@ export function ReceiptMobileCard({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate font-semibold text-ink">{receipt.contrato.unidad.propiedad.direccion} · Unidad {receipt.contrato.unidad.identificador}</p>
-            <p className="mt-1 truncate text-sm text-ink-secondary">{receipt.contrato.arrendatario}</p>
+            <p className="mt-1 truncate text-sm text-ink-secondary">{receipt.contrato.arrendatario}</p><span className="mt-1 inline-flex rounded-full bg-brand-soft px-2.5 py-1 text-xs font-semibold text-brand">{receipt.contrato.formaPago === "EFECTIVO" ? "Efectivo" : "Transferencia"}</span>
           </div>
           <div className="flex shrink-0 items-center gap-2"><ReceiptBadge status={receipt.estatus} /><span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center text-ink-secondary"><svg className="size-4 origin-center transition-transform duration-200 ease-out group-open:rotate-180" fill="none" viewBox="0 0 20 20"><path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" /></svg></span></div>
         </div>

@@ -341,6 +341,7 @@ export async function renovarContrato(contratoId: string, input: unknown) {
       emailArrendatario: contract.emailArrendatario, telefonoArrendatario: contract.telefonoArrendatario,
       avalTelefono: contract.avalTelefono, avalCorreo: contract.avalCorreo,
       fechaInicio: startDate, fechaFin: inflationDate(data.fechaFin), plazoMeses: data.plazoMeses,
+      formaPago: contract.formaPago,
       rentaMensualBase: rent.toFixed(2), diaPago: contract.diaPago,
       depositoGarantia: contract.depositoGarantia, cargoFijoMensual: "0.00",
       estado: EstadoContrato.ACTIVO,

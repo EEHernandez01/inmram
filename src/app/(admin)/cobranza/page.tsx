@@ -216,13 +216,13 @@ export default async function CollectionPage({
             {status ? <Link className="text-sm font-semibold text-brand hover:text-brand-hover" href={collectionUrl()}>Ver todos</Link> : null}
             <ReceiptPrintControls
               periodValue={periodValue}
-              receipts={receipts.map((receipt) => ({
+              receipts={receipts.filter((receipt) => receipt.contrato.formaPago === "EFECTIVO").map((receipt) => ({
                 id: receipt.id,
                 label: `${receipt.contrato.unidad.propiedad.direccion} · Unidad ${receipt.contrato.unidad.identificador} — ${receipt.contrato.arrendatario}`,
               }))}
               search={search}
               status={status}
-              total={pagination?.total ?? receipts.length}
+              total={pagination?.totalImprimible ?? receipts.filter((receipt) => receipt.contrato.formaPago === "EFECTIVO").length}
             />
           </div>
         </div>

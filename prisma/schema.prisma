@@ -231,6 +231,7 @@ model Contrato {
   fechaProximoCobro    DateTime?         @db.Date
   continuidadMensual   Boolean           @default(false)
   periodicidadCobro    PeriodicidadCobro @default(MENSUAL)
+  formaPago            FormaPago         @default(EFECTIVO)
   rentaMensualBase     Decimal           @db.Decimal(14, 2)
   diaPago              Int
   depositoGarantia     Decimal           @db.Decimal(14, 2)

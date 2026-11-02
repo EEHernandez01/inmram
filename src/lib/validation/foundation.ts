@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { EstadoContrato, PeriodicidadCobro, TipoGarantia, TipoUnidad } from "../../generated/prisma/enums.ts";
+import { EstadoContrato, FormaPago, PeriodicidadCobro, TipoGarantia, TipoUnidad } from "../../generated/prisma/enums.ts";
 import { hasValidPagareDetails } from "../contracts.ts";
 import { normalizeCurrencyInput } from "../format.ts";
 
@@ -152,6 +152,7 @@ export const contratoInputSchema = z
     fechaFin: date,
     fechaProximoCobro: date,
     periodicidadCobro: z.enum(PeriodicidadCobro).default(PeriodicidadCobro.MENSUAL),
+    formaPago: z.enum(FormaPago).default(FormaPago.EFECTIVO),
     rentaMensualBase: money,
     diaPago: z.coerce.number().int().min(1).max(31),
     depositoGarantia: money,

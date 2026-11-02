@@ -1,0 +1,2 @@
+ALTER TABLE "Contrato"
+ADD COLUMN "formaPago" "FormaPago" NOT NULL DEFAULT 'EFECTIVO';

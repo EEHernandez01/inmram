@@ -9,6 +9,7 @@ import {
 import { propertyReportFilterSchema } from "../src/lib/validation/reports.ts";
 import { paymentInputSchema, paymentReversalInputSchema, receiptReviewResolutionSchema } from "../src/lib/validation/collection.ts";
 import { propertyPhotoUploadSchema } from "../src/lib/validation/property-photos.ts";
+import { contratoInputSchema } from "../src/lib/validation/foundation.ts";
 import { altaPropiedadAsistidaSchema } from "../src/lib/validation/property-onboarding.ts";
 import { propietarioCuentaSchema, propietarioInputSchema } from "../src/lib/validation/owners.ts";
 import { canManageOperations, canViewReports } from "../src/lib/auth/role-policy.ts";
@@ -175,6 +176,27 @@ test("acepta propietarios nuevos o existentes y contratos opcionales en el alta 
   assert.equal(altaPropiedadAsistidaSchema.safeParse(input).success, true);
   assert.equal(altaPropiedadAsistidaSchema.safeParse({ ...input, propietario: { modo: "EXISTENTE", propietarioId: "no-es-uuid" } }).success, false);
   assert.equal(altaPropiedadAsistidaSchema.safeParse({ ...input, unidades: [{ ...input.unidades[0], propietario: { modo: "OTRO" } }] }).success, false);
+});
+
+
+test("los contratos guardan una forma de pago válida y usan efectivo por omisión", () => {
+  const contract = {
+    unidadId: unitId,
+    arrendatario: "Ana Pérez",
+    aval: "Luis Pérez",
+    fechaInicio: "2026-01-01",
+    plazoMeses: 12,
+    fechaFin: "2026-12-31",
+    fechaProximoCobro: "2026-01-05",
+    rentaMensualBase: "12000.00",
+    diaPago: 5,
+    depositoGarantia: "12000.00",
+    estado: "ACTIVO",
+  };
+
+  assert.equal(contratoInputSchema.parse(contract).formaPago, "EFECTIVO");
+  assert.equal(contratoInputSchema.parse({ ...contract, formaPago: "TRANSFERENCIA" }).formaPago, "TRANSFERENCIA");
+  assert.equal(contratoInputSchema.safeParse({ ...contract, formaPago: "CHEQUE" }).success, false);
 });
 
 test("valida el catálogo de propietarios y normaliza contactos opcionales", () => {
