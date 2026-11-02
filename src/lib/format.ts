@@ -56,6 +56,7 @@ export function formatContractReceiptPeriodRange(
     contractEndDate,
     contractStartDate,
   );
+  if (coverage.months === 0) return "Sin periodo cubierto";
   return formatDateRange(coverage.periodStart, coverage.periodEnd);
 }
 

@@ -95,6 +95,7 @@ export async function sincronizarCobranzaSistema(now = new Date()) {
       const dueDate = calculateContractReceiptDueDate(period, contract.diaPago, firstCollectionDate);
       const intervalMonths = collectionIntervalMonths(contract.periodicidadCobro);
       const coverage = calculateReceiptCoverage(period, intervalMonths, contract.fechaFin, contract.fechaInicio);
+      if (coverage.months === 0 || coverage.periodEnd < period) return null;
       return {
         contratoId: contract.id,
         periodo: period,
@@ -107,7 +108,7 @@ export async function sincronizarCobranzaSistema(now = new Date()) {
           paid: false,
         }),
       };
-    });
+    }).filter((receipt): receipt is NonNullable<typeof receipt> => receipt !== null);
 
   const created = receiptData.length
     ? await prisma.recibo.createMany({ data: receiptData, skipDuplicates: true })

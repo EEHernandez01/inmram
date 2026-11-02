@@ -962,6 +962,7 @@ async function crearContratoEnTransaccion(
   const endDate = toDatabaseDate(data.fechaFin);
   const nextCollectionDate = toDatabaseDate(data.fechaProximoCobro);
   const period = currentReceiptPeriod();
+  const coverage = calculateReceiptCoverage(period, collectionIntervalMonths(data.periodicidadCobro), endDate, startDate);
   const guarantee = normalizarGarantia(data);
 
   const contract = await transaction.contrato.create({
@@ -980,10 +981,11 @@ async function crearContratoEnTransaccion(
     contractOverlapsPeriod({ startDate, endDate, period }) &&
     collectionPeriodIsEligible(period, nextCollectionDate, collectionIntervalMonths(data.periodicidadCobro)) &&
     nextCollectionDate.getTime() <= new Date(Date.UTC(period.getUTCFullYear(), period.getUTCMonth() + 1, 0)).getTime() &&
-    nextCollectionDate.getTime() >= period.getTime()
+    nextCollectionDate.getTime() >= period.getTime() &&
+    coverage.months > 0 &&
+    coverage.periodEnd >= period
   ) {
     const dueDate = new Date(nextCollectionDate);
-    const coverage = calculateReceiptCoverage(period, collectionIntervalMonths(data.periodicidadCobro), endDate, startDate);
     await transaction.recibo.create({
       data: {
         contratoId: contract.id,
@@ -1049,8 +1051,8 @@ export async function actualizarContrato(
     const reviewed = await tx.recibo.updateMany({ where: receiptsToReview, data: { estatus: EstadoRecibo.REVISION } });
     for (const receipt of receiptsBeforeReview) await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "ENVIAR_A_REVISION", entidad: "Recibo", entidadId: receipt.id, antes: { estatus: receipt.estatus }, despues: { estatus: EstadoRecibo.REVISION, contratoId: id } });
     const receipt = collectionPeriodIsEligible(period, nextCollectionDate, collectionIntervalMonths(updated.periodicidadCobro)) ? await tx.recibo.findFirst({ where: { contratoId: id, periodo: period, estatus: { notIn: [EstadoRecibo.PAGADO, EstadoRecibo.OMITIDO, EstadoRecibo.REVISION] } }, include: { pagos: { where: { anuladoEn: null }, orderBy: { fechaPago: "desc" } } } }) : null;
-    if (receipt) {
-      const coverage = calculateReceiptCoverage(period, collectionIntervalMonths(updated.periodicidadCobro), updated.fechaFin, updated.fechaInicio);
+    const coverage = calculateReceiptCoverage(period, collectionIntervalMonths(updated.periodicidadCobro), updated.fechaFin, updated.fechaInicio);
+    if (receipt && coverage.months > 0 && coverage.periodEnd >= period) {
       const dueDate = calculateContractReceiptDueDate(period, updated.diaPago, nextCollectionDate);
       const amount = calculatePeriodicCharge(updated.rentaMensualBase.toString(), coverage.months);
       const paidCents = receipt.pagos.reduce((sum, payment) => sum + Math.round(Number(payment.monto) * 100), 0);

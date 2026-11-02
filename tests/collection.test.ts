@@ -63,7 +63,7 @@ test("el recibo cubre el intervalo y limita el último periodo al fin del contra
     new Date("2027-02-14T00:00:00.000Z"),
   );
   assert.equal(coverage.months, 4);
-  assert.equal(coverage.periodEnd.toISOString(), "2027-02-28T00:00:00.000Z");
+  assert.equal(coverage.periodEnd.toISOString(), "2027-02-13T00:00:00.000Z");
   assert.equal(
     calculateReceiptCoverage(receiptPeriodFromValue("2026-12"), 2).periodEnd.toISOString(),
     "2027-01-31T00:00:00.000Z",
@@ -71,33 +71,33 @@ test("el recibo cubre el intervalo y limita el último periodo al fin del contra
 });
 
 test("los periodos siguen los aniversarios del inicio del contrato", () => {
-  const start = new Date("2026-11-15T00:00:00.000Z");
+  const start = new Date("2026-11-20T00:00:00.000Z");
   const monthly = calculateReceiptCoverage(receiptPeriodFromValue("2026-11"), 1, new Date("2027-11-14T00:00:00.000Z"), start);
-  assert.equal(monthly.periodStart.toISOString(), "2026-11-15T00:00:00.000Z");
-  assert.equal(monthly.periodEnd.toISOString(), "2026-12-15T00:00:00.000Z");
+  assert.equal(monthly.periodStart.toISOString(), "2026-11-20T00:00:00.000Z");
+  assert.equal(monthly.periodEnd.toISOString(), "2026-12-19T00:00:00.000Z");
   assert.equal(
     formatContractReceiptPeriodRange(receiptPeriodFromValue("2026-11"), "MENSUAL", start, new Date("2027-11-14T00:00:00.000Z")),
-    "del 15 de noviembre de 2026 al 15 de diciembre de 2026",
+    "del 20 de noviembre de 2026 al 19 de diciembre de 2026",
   );
 
   const bimonthly = calculateReceiptCoverage(receiptPeriodFromValue("2026-11"), 2, null, start);
-  assert.equal(bimonthly.periodEnd.toISOString(), "2027-01-15T00:00:00.000Z");
+  assert.equal(bimonthly.periodEnd.toISOString(), "2027-01-19T00:00:00.000Z");
   const semiannual = calculateReceiptCoverage(receiptPeriodFromValue("2026-11"), 6, null, start);
-  assert.equal(semiannual.periodEnd.toISOString(), "2027-05-15T00:00:00.000Z");
+  assert.equal(semiannual.periodEnd.toISOString(), "2027-05-19T00:00:00.000Z");
   const annual = calculateReceiptCoverage(receiptPeriodFromValue("2026-11"), 12, null, start);
-  assert.equal(annual.periodEnd.toISOString(), "2027-11-15T00:00:00.000Z");
+  assert.equal(annual.periodEnd.toISOString(), "2027-11-19T00:00:00.000Z");
 });
 
 test("el recibo de cada mes cubre desde el aniversario de ese mes al siguiente", () => {
   const start = new Date("2026-11-15T00:00:00.000Z");
   const first = calculateReceiptCoverage(receiptPeriodFromValue("2027-01"), 1, null, start);
   assert.equal(first.periodStart.toISOString(), "2027-01-15T00:00:00.000Z");
-  assert.equal(first.periodEnd.toISOString(), "2027-02-15T00:00:00.000Z");
+  assert.equal(first.periodEnd.toISOString(), "2027-02-14T00:00:00.000Z");
   assert.ok(first.periodEnd >= receiptPeriodFromValue("2027-01"));
 
   const next = calculateReceiptCoverage(receiptPeriodFromValue("2027-02"), 1, null, start);
   assert.equal(next.periodStart.toISOString(), "2027-02-15T00:00:00.000Z");
-  assert.equal(next.periodEnd.toISOString(), "2027-03-15T00:00:00.000Z");
+  assert.equal(next.periodEnd.toISOString(), "2027-03-14T00:00:00.000Z");
 });
 
 test("los aniversarios de fin de mes recuperan el día original y respetan el término", () => {
@@ -105,14 +105,40 @@ test("los aniversarios de fin de mes recuperan el día original y respetan el t�
   const february = receiptPeriodFromValue("2027-02");
   const start = new Date("2027-01-31T00:00:00.000Z");
   const first = calculateReceiptCoverage(january, 1, null, start);
-  assert.equal(first.periodEnd.toISOString(), "2027-02-28T00:00:00.000Z");
+  assert.equal(first.periodEnd.toISOString(), "2027-02-27T00:00:00.000Z");
   const second = calculateReceiptCoverage(february, 1, null, start);
   assert.equal(second.periodStart.toISOString(), "2027-02-28T00:00:00.000Z");
-  assert.equal(second.periodEnd.toISOString(), "2027-03-31T00:00:00.000Z");
+  assert.equal(second.periodEnd.toISOString(), "2027-03-30T00:00:00.000Z");
 
   const final = calculateReceiptCoverage(january, 6, new Date("2027-03-10T00:00:00.000Z"), start);
-  assert.equal(final.periodEnd.toISOString(), "2027-03-10T00:00:00.000Z");
+  assert.equal(final.periodEnd.toISOString(), "2027-03-09T00:00:00.000Z");
   assert.equal(final.months, 3);
+});
+
+test("los contratos que inician los días 29, 30 y 31 cierran antes del aniversario de febrero", () => {
+  const january2027 = receiptPeriodFromValue("2027-01");
+  const january2028 = receiptPeriodFromValue("2028-01");
+  for (const day of [29, 30, 31]) {
+    const start = new Date(Date.UTC(2027, 0, day));
+    const coverage = calculateReceiptCoverage(january2027, 1, null, start);
+    assert.equal(coverage.periodEnd.toISOString(), "2027-02-27T00:00:00.000Z");
+  }
+  const leapStart = new Date("2028-01-31T00:00:00.000Z");
+  assert.equal(
+    calculateReceiptCoverage(january2028, 1, null, leapStart).periodEnd.toISOString(),
+    "2028-02-28T00:00:00.000Z",
+  );
+});
+
+test("el fin contractual también se considera un límite exclusivo", () => {
+  const start = new Date("2026-11-20T00:00:00.000Z");
+  const coverage = calculateReceiptCoverage(
+    receiptPeriodFromValue("2026-11"),
+    1,
+    new Date("2026-12-18T00:00:00.000Z"),
+    start,
+  );
+  assert.equal(coverage.periodEnd.toISOString(), "2026-12-17T00:00:00.000Z");
 });
 
 test("renta y servicios mensuales se multiplican con precisión de centavos", () => {

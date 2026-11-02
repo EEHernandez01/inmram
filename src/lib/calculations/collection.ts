@@ -77,6 +77,10 @@ function addMonthsOnContractAnniversary(anchorDate: Date, monthOffset: number) {
   return new Date(Date.UTC(year, month, day));
 }
 
+function previousDay(value: Date) {
+  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate() - 1));
+}
+
 export function calculateReceiptCoverage(
   period: Date,
   intervalMonths: number,
@@ -89,11 +93,13 @@ export function calculateReceiptCoverage(
     const contractEndMonth = contractEndDate
       ? contractEndDate.getUTCFullYear() * 12 + contractEndDate.getUTCMonth()
       : startMonth + intervalMonths - 1;
-    const months = Math.max(1, Math.min(intervalMonths, contractEndMonth - startMonth + 1));
+    const months = Math.max(0, Math.min(intervalMonths, contractEndMonth - startMonth + 1));
+    const boundary = new Date(Date.UTC(period.getUTCFullYear(), period.getUTCMonth() + months, 1));
+    const periodEnd = contractEndDate && contractEndDate < boundary ? previousDay(contractEndDate) : previousDay(boundary);
     return {
       months,
       periodStart: period,
-      periodEnd: new Date(Date.UTC(period.getUTCFullYear(), period.getUTCMonth() + months, 0)),
+      periodEnd,
     };
   }
   const anchorDate = contractStartDate;
@@ -102,12 +108,15 @@ export function calculateReceiptCoverage(
   const cycleOffset = Math.max(0, monthOffset);
   const periodStart = addMonthsOnContractAnniversary(anchorDate, cycleOffset);
   const unboundedEnd = addMonthsOnContractAnniversary(anchorDate, cycleOffset + intervalMonths);
-  const periodEnd = contractEndDate && contractEndDate < unboundedEnd ? contractEndDate : unboundedEnd;
+  const boundary = contractEndDate && contractEndDate < unboundedEnd ? contractEndDate : unboundedEnd;
+  const periodEnd = previousDay(boundary);
   const periodMonth = period.getUTCFullYear() * 12 + period.getUTCMonth();
   const contractEndMonth = contractEndDate
     ? contractEndDate.getUTCFullYear() * 12 + contractEndDate.getUTCMonth()
     : periodMonth + intervalMonths - 1;
-  const months = Math.max(1, Math.min(intervalMonths, contractEndMonth - periodMonth + 1));
+  const months = periodStart > periodEnd
+    ? 0
+    : Math.max(1, Math.min(intervalMonths, contractEndMonth - periodMonth + 1));
   return {
     months,
     periodStart,
