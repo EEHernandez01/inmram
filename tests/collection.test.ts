@@ -89,6 +89,19 @@ test("los periodos siguen los aniversarios del inicio del contrato", () => {
   assert.equal(annual.periodEnd.toISOString(), "2027-11-15T00:00:00.000Z");
 });
 
+test("un primer cobro diferido evita periodos que terminarían antes del recibo", () => {
+  const start = new Date("2026-11-15T00:00:00.000Z");
+  const firstCollection = new Date("2027-01-01T00:00:00.000Z");
+  const first = calculateReceiptCoverage(receiptPeriodFromValue("2027-01"), 1, null, start, firstCollection);
+  assert.equal(first.periodStart.toISOString(), "2026-12-15T00:00:00.000Z");
+  assert.equal(first.periodEnd.toISOString(), "2027-01-15T00:00:00.000Z");
+  assert.ok(first.periodEnd >= receiptPeriodFromValue("2027-01"));
+
+  const next = calculateReceiptCoverage(receiptPeriodFromValue("2027-02"), 1, null, start, firstCollection);
+  assert.equal(next.periodStart.toISOString(), "2027-01-15T00:00:00.000Z");
+  assert.equal(next.periodEnd.toISOString(), "2027-02-15T00:00:00.000Z");
+});
+
 test("los aniversarios de fin de mes recuperan el día original y respetan el término", () => {
   const january = receiptPeriodFromValue("2027-01");
   const february = receiptPeriodFromValue("2027-02");

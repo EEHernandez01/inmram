@@ -101,7 +101,11 @@ export function calculateReceiptCoverage(
   const collectionAnchor = firstCollectionDate ?? anchorDate;
   const monthOffset = (period.getUTCFullYear() - collectionAnchor.getUTCFullYear()) * 12
     + period.getUTCMonth() - collectionAnchor.getUTCMonth();
-  const cycleOffset = Math.max(0, Math.floor(monthOffset / intervalMonths)) * intervalMonths;
+  let firstCycleOffset = 0;
+  while (addMonthsOnContractAnniversary(anchorDate, firstCycleOffset + intervalMonths) < collectionAnchor) {
+    firstCycleOffset += intervalMonths;
+  }
+  const cycleOffset = firstCycleOffset + Math.max(0, Math.floor(monthOffset / intervalMonths)) * intervalMonths;
   const periodStart = addMonthsOnContractAnniversary(anchorDate, cycleOffset);
   const unboundedEnd = addMonthsOnContractAnniversary(anchorDate, cycleOffset + intervalMonths);
   const periodEnd = contractEndDate && contractEndDate < unboundedEnd ? contractEndDate : unboundedEnd;
