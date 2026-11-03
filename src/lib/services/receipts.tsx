@@ -35,7 +35,9 @@ export async function generarReciboPdf(receiptId: string) {
     rentalPeriod: formatReceiptCoverageRange(receipt.periodoInicio, receipt.periodoFin),
     issuedAt: formatLetterDate(calculateReceiptDueDate(receipt.periodo, receipt.contrato.diaPago)),
   };
-  const backgroundImage = await readFile(path.join(process.cwd(), "public", "plantilla-cobranza.png"));
+  const backgroundImage = isRochesterAddress(data.property)
+    ? await readFile(path.join(process.cwd(), "public", "plantilla-cobranza.png"))
+    : undefined;
   return renderToBuffer(<ReceiptDocument backgroundImage={backgroundImage} data={data} />);
 }
 
@@ -84,8 +86,15 @@ export async function generarRecibosCobranzaPdf({
       issuedAt: formatLetterDate(calculateReceiptDueDate(receipt.periodo, receipt.contrato.diaPago)),
     };
   });
-  const backgroundImage = await readFile(path.join(process.cwd(), "public", "plantilla-cobranza.png"));
-  return renderToBuffer(<Document title="Recibos de cobranza" author={issuer}>{pages.map((data, index) => <ReceiptPage backgroundImage={backgroundImage} data={data} key={`${orderedReceipts[index].id}-${index}`} />)}</Document>);
+  const hasRochesterReceipts = pages.some((data) => isRochesterAddress(data.property));
+  const backgroundImage = hasRochesterReceipts
+    ? await readFile(path.join(process.cwd(), "public", "plantilla-cobranza.png"))
+    : undefined;
+  return renderToBuffer(<Document title="Recibos de cobranza" author={issuer}>{pages.map((data, index) => <ReceiptPage backgroundImage={isRochesterAddress(data.property) ? backgroundImage : undefined} data={data} key={`${orderedReceipts[index].id}-${index}`} />)}</Document>);
+}
+
+function isRochesterAddress(address: string) {
+  return /\brochester\b/i.test(address.normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
 }
 
 function amountInWords(value: number) {

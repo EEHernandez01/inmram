@@ -10,6 +10,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 66,
     paddingTop: 240,
   },
+  pageWithoutBackground: { paddingTop: 72 },
   background: { height: 792, left: 0, position: "absolute", top: 0, width: 612, zIndex: -1 },
   date: { fontSize: 12, marginBottom: 80, textAlign: "right" },
   content: { flexGrow: 1 },
@@ -34,14 +35,14 @@ export type ReceiptPdfData = {
   issuedAt: string;
 };
 
-export function ReceiptDocument({ data, backgroundImage }: { data: ReceiptPdfData; backgroundImage: Buffer }) {
+export function ReceiptDocument({ data, backgroundImage }: { data: ReceiptPdfData; backgroundImage?: Buffer }) {
   return <Document title="Recibo" author={data.issuer}><ReceiptPage backgroundImage={backgroundImage} data={data} /></Document>;
 }
 
-export function ReceiptPage({ data, backgroundImage }: { data: ReceiptPdfData; backgroundImage: Buffer }) {
-  return <Page size="LETTER" style={styles.page}>
+export function ReceiptPage({ data, backgroundImage }: { data: ReceiptPdfData; backgroundImage?: Buffer }) {
+  return <Page size="LETTER" style={[styles.page, !backgroundImage && styles.pageWithoutBackground]}>
       {/* eslint-disable-next-line jsx-a11y/alt-text -- React PDF Image does not accept alt text. */}
-      <Image fixed src={backgroundImage} style={styles.background} />
+      {backgroundImage ? <Image fixed src={backgroundImage} style={styles.background} /> : null}
       <View style={styles.content}>
         <Text style={styles.date}>{data.issuedAt}</Text>
         <Text style={styles.paragraph}>
