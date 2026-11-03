@@ -1,5 +1,7 @@
 import "server-only";
 
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { Document, renderToBuffer } from "@react-pdf/renderer";
 
 import { getOwnerScope, READ_ROLES, requireSystemRole } from "@/lib/auth/authorization";
@@ -33,7 +35,8 @@ export async function generarReciboPdf(receiptId: string) {
     rentalPeriod: formatReceiptCoverageRange(receipt.periodoInicio, receipt.periodoFin),
     issuedAt: formatLetterDate(calculateReceiptDueDate(receipt.periodo, receipt.contrato.diaPago)),
   };
-  return renderToBuffer(<ReceiptDocument data={data} />);
+  const backgroundImage = await readFile(path.join(process.cwd(), "public", "plantilla-cobranza.png"));
+  return renderToBuffer(<ReceiptDocument backgroundImage={backgroundImage} data={data} />);
 }
 
 export async function generarRecibosCobranzaPdf({
@@ -81,7 +84,8 @@ export async function generarRecibosCobranzaPdf({
       issuedAt: formatLetterDate(calculateReceiptDueDate(receipt.periodo, receipt.contrato.diaPago)),
     };
   });
-  return renderToBuffer(<Document title="Recibos de cobranza" author={issuer}>{pages.map((data, index) => <ReceiptPage data={data} key={`${orderedReceipts[index].id}-${index}`} />)}</Document>);
+  const backgroundImage = await readFile(path.join(process.cwd(), "public", "plantilla-cobranza.png"));
+  return renderToBuffer(<Document title="Recibos de cobranza" author={issuer}>{pages.map((data, index) => <ReceiptPage backgroundImage={backgroundImage} data={data} key={`${orderedReceipts[index].id}-${index}`} />)}</Document>);
 }
 
 function amountInWords(value: number) {
