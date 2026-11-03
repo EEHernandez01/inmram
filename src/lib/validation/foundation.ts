@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { EstadoContrato, FormaPago, PeriodicidadCobro, TipoGarantia, TipoUnidad } from "../../generated/prisma/enums.ts";
+import { EstadoContrato, FormaPago, ModoPeriodoCobro, PeriodicidadCobro, TipoGarantia, TipoUnidad } from "../../generated/prisma/enums.ts";
 import { hasValidPagareDetails } from "../contracts.ts";
 import { normalizeCurrencyInput } from "../format.ts";
 
@@ -152,6 +152,7 @@ export const contratoInputSchema = z
     fechaFin: date,
     fechaProximoCobro: date,
     periodicidadCobro: z.enum(PeriodicidadCobro).default(PeriodicidadCobro.MENSUAL),
+    modoPeriodoCobro: z.enum(ModoPeriodoCobro).default(ModoPeriodoCobro.ANIVERSARIO),
     formaPago: z.enum(FormaPago).default(FormaPago.EFECTIVO),
     rentaMensualBase: money,
     diaPago: z.coerce.number().int().min(1).max(31),
@@ -163,6 +164,9 @@ export const contratoInputSchema = z
   })
   .superRefine((input, context) => {
     const intervalMonths = { MENSUAL: 1, BIMESTRAL: 2, SEMESTRAL: 6, ANUAL: 12 }[input.periodicidadCobro];
+    if (input.modoPeriodoCobro === ModoPeriodoCobro.MES_CALENDARIO && input.periodicidadCobro !== PeriodicidadCobro.MENSUAL) {
+      context.addIssue({ code: "custom", message: "La cobertura por mes calendario solo aplica a contratos mensuales.", path: ["modoPeriodoCobro"] });
+    }
     const maxReceiptAmount = 999_999_999_999.99;
     for (const field of ["rentaMensualBase", "cargoFijoMensual"] as const) {
       if (Number(input[field]) > maxReceiptAmount / intervalMonths) {

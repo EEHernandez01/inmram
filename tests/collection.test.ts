@@ -91,6 +91,29 @@ test("los periodos siguen los aniversarios del inicio del contrato", () => {
   assert.equal(annual.periodEnd.toISOString(), "2027-11-19T00:00:00.000Z");
 });
 
+test("el modo mes calendario cubre el mes completo sin cambiar el importe mensual", () => {
+  const period = receiptPeriodFromValue("2026-11");
+  const coverage = calculateReceiptCoverage(
+    period,
+    1,
+    new Date("2026-11-14T00:00:00.000Z"),
+    new Date("2026-11-20T00:00:00.000Z"),
+    "MES_CALENDARIO",
+  );
+
+  assert.equal(coverage.months, 1);
+  assert.equal(coverage.periodStart.toISOString(), "2026-11-01T00:00:00.000Z");
+  assert.equal(coverage.periodEnd.toISOString(), "2026-11-30T00:00:00.000Z");
+  assert.equal(calculatePeriodicCharge("37000.00", coverage.months), "37000.00");
+});
+
+test("el modo aniversario se mantiene como valor predeterminado y mes calendario rechaza frecuencia bimestral", () => {
+  const period = receiptPeriodFromValue("2026-11");
+  const start = new Date("2026-11-20T00:00:00.000Z");
+  assert.equal(calculateReceiptCoverage(period, 1, null, start).periodStart.toISOString(), start.toISOString());
+  assert.throws(() => calculateReceiptCoverage(period, 2, null, start, "MES_CALENDARIO"), /solo aplica a contratos mensuales/);
+});
+
 test("los recibos detectan cobertura total y traslapes inclusivos", () => {
   const existing = { periodStart: new Date("2026-10-06T00:00:00.000Z"), periodEnd: new Date("2027-01-05T00:00:00.000Z") };
   const covered = { periodStart: new Date("2026-11-06T00:00:00.000Z"), periodEnd: new Date("2027-01-05T00:00:00.000Z") };

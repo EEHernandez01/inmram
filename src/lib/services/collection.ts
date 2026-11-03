@@ -142,6 +142,7 @@ export async function sincronizarCobranzaSistema(now = new Date()) {
       fechaProximoCobro: true,
       fechaFin: true,
       periodicidadCobro: true,
+      modoPeriodoCobro: true,
     },
   });
 
@@ -155,7 +156,7 @@ export async function sincronizarCobranzaSistema(now = new Date()) {
 
       const dueDate = calculateContractReceiptDueDate(period, contract.diaPago, firstCollectionDate);
       if (receiptPeriodValue(dueDate) !== receiptPeriodValue(period)) return;
-      const coverage = calculateReceiptCoverage(period, intervalMonths, contract.fechaFin, contract.fechaInicio);
+      const coverage = calculateReceiptCoverage(period, intervalMonths, contract.fechaFin, contract.fechaInicio, contract.modoPeriodoCobro);
       if (coverage.months === 0 || coverage.periodEnd < period) return;
       const existing = await tx.recibo.findUnique({ where: { contratoId_periodo: { contratoId: contract.id, periodo: period } }, select: { id: true } });
       if (existing) return;

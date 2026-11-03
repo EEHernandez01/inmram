@@ -36,6 +36,11 @@ enum PeriodicidadCobro {
   ANUAL
 }
 
+enum ModoPeriodoCobro {
+  ANIVERSARIO
+  MES_CALENDARIO
+}
+
 enum TipoGarantia {
   AVAL
   PRENDA
@@ -231,6 +236,7 @@ model Contrato {
   fechaProximoCobro    DateTime?         @db.Date
   continuidadMensual   Boolean           @default(false)
   periodicidadCobro    PeriodicidadCobro @default(MENSUAL)
+  modoPeriodoCobro     ModoPeriodoCobro  @default(ANIVERSARIO)
   formaPago            FormaPago         @default(EFECTIVO)
   rentaMensualBase     Decimal           @db.Decimal(14, 2)
   diaPago              Int

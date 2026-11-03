@@ -36,6 +36,7 @@ export async function POST(
       fechaFin: formValue(form, "fechaFin"),
       fechaProximoCobro: formValue(form, "fechaProximoCobro"),
       periodicidadCobro: (formValue(form, "periodicidadCobro") || "MENSUAL") as "MENSUAL" | "BIMESTRAL" | "SEMESTRAL" | "ANUAL",
+      modoPeriodoCobro: (formValue(form, "modoPeriodoCobro") || "ANIVERSARIO") as "ANIVERSARIO" | "MES_CALENDARIO",
       formaPago: (formValue(form, "formaPago") || "EFECTIVO") as "EFECTIVO" | "TRANSFERENCIA",
       rentaMensualBase: formValue(form, "rentaMensualBase"),
       diaPago: Number(formValue(form, "diaPago")),

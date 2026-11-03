@@ -1,6 +1,7 @@
 export const COLLECTION_TIME_ZONE = "America/Mexico_City";
 
 export type CollectionFrequency = "MENSUAL" | "BIMESTRAL" | "SEMESTRAL" | "ANUAL";
+export type ReceiptCoverageMode = "ANIVERSARIO" | "MES_CALENDARIO";
 
 const COLLECTION_INTERVALS: Record<CollectionFrequency, number> = {
   MENSUAL: 1,
@@ -92,8 +93,13 @@ export function calculateReceiptCoverage(
   intervalMonths: number,
   contractEndDate?: Date | null,
   contractStartDate?: Date | null,
+  mode: ReceiptCoverageMode = "ANIVERSARIO",
 ) {
   if (!Number.isInteger(intervalMonths) || intervalMonths < 1) throw new Error("La periodicidad de cobro no es válida.");
+  if (mode === "MES_CALENDARIO") {
+    if (intervalMonths !== 1) throw new Error("La cobertura por mes calendario solo aplica a contratos mensuales.");
+    return { months: 1, periodStart: new Date(Date.UTC(period.getUTCFullYear(), period.getUTCMonth(), 1)), periodEnd: receiptPeriodEnd(period) };
+  }
   if (!contractStartDate) {
     const startMonth = period.getUTCFullYear() * 12 + period.getUTCMonth();
     const contractEndMonth = contractEndDate

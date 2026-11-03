@@ -239,6 +239,7 @@ function contractInput(formData: FormData) {
     fechaFin: value(formData, "fechaFin"),
     fechaProximoCobro: value(formData, "fechaProximoCobro"),
     periodicidadCobro: (value(formData, "periodicidadCobro") || "MENSUAL") as "MENSUAL" | "BIMESTRAL" | "SEMESTRAL" | "ANUAL",
+    modoPeriodoCobro: (value(formData, "modoPeriodoCobro") || "ANIVERSARIO") as "ANIVERSARIO" | "MES_CALENDARIO",
     formaPago: (value(formData, "formaPago") || "EFECTIVO") as "EFECTIVO" | "TRANSFERENCIA",
     rentaMensualBase: value(formData, "rentaMensualBase"),
     diaPago: Number(value(formData, "diaPago")),

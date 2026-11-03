@@ -195,6 +195,9 @@ test("los contratos guardan una forma de pago v√°lida y usan efectivo por omisi√
   };
 
   assert.equal(contratoInputSchema.parse(contract).formaPago, "EFECTIVO");
+  assert.equal(contratoInputSchema.parse(contract).modoPeriodoCobro, "ANIVERSARIO");
+  assert.equal(contratoInputSchema.parse({ ...contract, modoPeriodoCobro: "MES_CALENDARIO" }).modoPeriodoCobro, "MES_CALENDARIO");
+  assert.equal(contratoInputSchema.safeParse({ ...contract, periodicidadCobro: "BIMESTRAL", modoPeriodoCobro: "MES_CALENDARIO" }).success, false);
   assert.equal(contratoInputSchema.parse({ ...contract, formaPago: "TRANSFERENCIA" }).formaPago, "TRANSFERENCIA");
   assert.equal(contratoInputSchema.safeParse({ ...contract, formaPago: "CHEQUE" }).success, false);
 });
