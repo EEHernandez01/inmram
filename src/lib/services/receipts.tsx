@@ -1,7 +1,5 @@
 import "server-only";
 
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { Document, renderToBuffer } from "@react-pdf/renderer";
 
 import { getOwnerScope, READ_ROLES, requireSystemRole } from "@/lib/auth/authorization";
@@ -19,26 +17,21 @@ export async function generarReciboPdf(receiptId: string) {
   const { user, session } = await requireSystemRole(READ_ROLES);
   const ownerId = await getOwnerScope();
   const id = recordIdSchema.parse(receiptId);
-  const receipt = await prisma.recibo.findFirst({ where: { id, contrato: ownerId ? { unidad: { propietarioId: ownerId } } : undefined }, include: { contrato: { include: { unidad: { include: { propiedad: true, propietario: true } } } } } });
+  const receipt = await prisma.recibo.findFirst({ where: { id, contrato: ownerId ? { unidad: { propietarioId: ownerId } } : undefined }, include: { contrato: { include: { unidad: { include: { propiedad: true } } } } } });
   if (!receipt) throw new DomainError("NOT_FOUND", "El recibo no existe.");
   if (receipt.contrato.formaPago === "TRANSFERENCIA") throw new DomainError("PAYMENT_REQUEST_UNAVAILABLE", "Los contratos con pago por transferencia no tienen solicitud de pago en PDF.");
   const total = calculateReceiptTotal({ rent: Number(receipt.monto) });
   const issuer = user.perfil?.razonSocial || user.perfil?.nombreCompleto || session.user.name || "Administración de rentas";
   const data = {
     issuer,
-    owner: receipt.contrato.unidad.propietario.nombre,
     tenant: receipt.contrato.arrendatario,
     total: formatCurrency(total),
     totalInWords: amountInWords(total),
     property: receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim(),
-    unit: receipt.contrato.unidad.identificador,
     rentalPeriod: formatReceiptCoverageRange(receipt.periodoInicio, receipt.periodoFin),
     issuedAt: formatLetterDate(calculateReceiptDueDate(receipt.periodo, receipt.contrato.diaPago)),
   };
-  const backgroundImage = isRochesterAddress(data.property)
-    ? await readFile(path.join(process.cwd(), "public", "plantilla-cobranza.png"))
-    : undefined;
-  return renderToBuffer(<ReceiptDocument backgroundImage={backgroundImage} data={data} />);
+  return renderToBuffer(<ReceiptDocument data={data} />);
 }
 
 export async function generarRecibosCobranzaPdf({
@@ -69,32 +62,19 @@ export async function generarRecibosCobranzaPdf({
   });
 
   const issuer = user.perfil?.razonSocial || user.perfil?.nombreCompleto || session.user.name || "Administración de rentas";
-  const ownerIds = [...new Set(orderedReceipts.map((receipt) => receipt.contrato.unidad.propietarioId))];
-  const owners = await prisma.propietario.findMany({ where: { id: { in: ownerIds } }, select: { id: true, nombre: true } });
-  const ownerNames = new Map(owners.map((owner) => [owner.id, owner.nombre]));
   const pages = orderedReceipts.map((receipt) => {
     const total = calculateReceiptTotal({ rent: Number(receipt.monto) });
     return {
       issuer,
-      owner: ownerNames.get(receipt.contrato.unidad.propietarioId) ?? "Propietario",
       tenant: receipt.contrato.arrendatario,
       total: formatCurrency(total),
       totalInWords: amountInWords(total),
       property: receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim(),
-      unit: receipt.contrato.unidad.identificador,
       rentalPeriod: formatReceiptCoverageRange(receipt.periodoInicio, receipt.periodoFin),
       issuedAt: formatLetterDate(calculateReceiptDueDate(receipt.periodo, receipt.contrato.diaPago)),
     };
   });
-  const hasRochesterReceipts = pages.some((data) => isRochesterAddress(data.property));
-  const backgroundImage = hasRochesterReceipts
-    ? await readFile(path.join(process.cwd(), "public", "plantilla-cobranza.png"))
-    : undefined;
-  return renderToBuffer(<Document title="Recibos de cobranza" author={issuer}>{pages.map((data, index) => <ReceiptPage backgroundImage={isRochesterAddress(data.property) ? backgroundImage : undefined} data={data} key={`${orderedReceipts[index].id}-${index}`} />)}</Document>);
-}
-
-function isRochesterAddress(address: string) {
-  return /\brochester\b/i.test(address.normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
+  return renderToBuffer(<Document title="Recibos de cobranza" author={issuer}>{pages.map((data, index) => <ReceiptPage data={data} key={`${orderedReceipts[index].id}-${index}`} />)}</Document>);
 }
 
 function amountInWords(value: number) {
@@ -144,6 +124,6 @@ export async function generarComprobantePagoPdf(receiptId: string) {
   const total = calculateReceiptTotal({ rent: Number(receipt.monto) });
   const issuer = user.perfil?.razonSocial || user.perfil?.nombreCompleto || session.user.name || "Administración de rentas";
   const property = receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim();
-  const data = { issuer, folio: receipt.id.slice(0, 8).toUpperCase(), tenant: receipt.contrato.arrendatario, concept: "renta", total: formatCurrency(total), totalInWords: amountInWords(total), property, unit: receipt.contrato.unidad.identificador, period: formatReceiptCoverageRange(receipt.periodoInicio, receipt.periodoFin), paymentDate: formatReceiptPlaceAndDate(receipt.fechaPago) };
+  const data = { issuer, folio: receipt.id.slice(0, 8).toUpperCase(), tenant: receipt.contrato.arrendatario, concept: "renta", total: formatCurrency(total), totalInWords: amountInWords(total), property, period: formatReceiptCoverageRange(receipt.periodoInicio, receipt.periodoFin), paymentDate: formatReceiptPlaceAndDate(receipt.fechaPago) };
   return renderToBuffer(<PaymentReceiptDocument data={data} />);
 }
