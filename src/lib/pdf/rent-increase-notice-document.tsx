@@ -31,7 +31,7 @@ export type RentIncreaseNoticePdfData = {
 };
 
 export function RentIncreaseNoticeDocument({ data }: { data: RentIncreaseNoticePdfData }) {
-  return <Document title={`Aviso de actualización de renta - ${data.tenant}`} author="Fernando S. Ramos Suárez">
+  return <Document title={`Aviso de actualización de renta - ${data.tenant}`} author="Fernando Ramos Suarez">
     <Page size="LETTER" style={styles.page}>
       <View style={styles.header}><Text style={styles.brand}>Administración de rentas</Text><Text style={styles.subtitle}>Notificación de actualización anual de renta</Text></View>
       <Text style={styles.title}>Aviso de actualización anual de renta</Text>
@@ -44,7 +44,7 @@ export function RentIncreaseNoticeDocument({ data }: { data: RentIncreaseNoticeP
         <Text style={[styles.label, { marginTop: 14 }]}>Vigencia de la nueva renta</Text><Text style={styles.value}>{data.effectiveDate}</Text>
       </View>
       <Text style={styles.paragraph}>Agradecemos su atención y puntualidad en los pagos.</Text>
-      <View style={styles.signature}><Text>Atentamente,</Text><Text style={styles.signer}>Fernando S. Ramos Suárez</Text><Text>Administración de rentas</Text></View>
+      <View style={styles.signature}><Text style={styles.signer}>Fernando Ramos Suarez</Text><Text>Administración de rentas</Text></View>
       <Text style={styles.footer}>Aviso de actualización de renta correspondiente al contrato de arrendamiento.</Text>
     </Page>
   </Document>;
