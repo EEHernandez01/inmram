@@ -40,7 +40,7 @@ export function ReceiptDocument({ data, backgroundImage }: { data: ReceiptPdfDat
 }
 
 export function ReceiptPage({ data, backgroundImage }: { data: ReceiptPdfData; backgroundImage?: Buffer }) {
-  return <Page size="LETTER" style={[styles.page, !backgroundImage && styles.pageWithoutBackground]}>
+  return <Page size="LETTER" style={[styles.page, backgroundImage ? {} : styles.pageWithoutBackground]}>
       {/* eslint-disable-next-line jsx-a11y/alt-text -- React PDF Image does not accept alt text. */}
       {backgroundImage ? <Image fixed src={backgroundImage} style={styles.background} /> : null}
       <View style={styles.content}>
