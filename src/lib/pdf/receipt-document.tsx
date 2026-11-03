@@ -36,7 +36,6 @@ export type ReceiptPdfData = {
   total: string;
   totalInWords: string;
   property: string;
-  unit: string;
   rentalPeriod: string;
   issuedAt: string;
 };
@@ -52,10 +51,10 @@ export function ReceiptPage({ data, backgroundImage }: { data: ReceiptPdfData; b
       <View style={styles.content}>
         <Text style={backgroundImage ? styles.date : styles.centeredDate}>{data.issuedAt}</Text>
         <Text style={backgroundImage ? styles.paragraph : styles.centeredParagraph}>
-          Recibí del Sr. <Text style={styles.emphasis}>{data.tenant}</Text> la cantidad de <Text style={styles.emphasis}>{data.total}</Text> ({data.totalInWords}) por concepto de renta <Text style={styles.emphasis}>{data.rentalPeriod}</Text>, del departamento ubicado en <Text style={styles.emphasis}>{data.property}, departamento {data.unit}</Text>.
+          Recibí del Sr. <Text style={styles.emphasis}>{data.tenant}</Text> la cantidad de <Text style={styles.emphasis}>{data.total}</Text> ({data.totalInWords}) por concepto de renta <Text style={styles.emphasis}>{data.rentalPeriod}</Text>, del inmueble ubicado en <Text style={styles.emphasis}>{data.property}</Text>.
         </Text>
         <View style={backgroundImage ? styles.signature : styles.centeredSignature}>
-          <Text style={backgroundImage ? styles.salutation : styles.centeredSalutation}>ATENTAMENTE</Text>
+          <Text style={backgroundImage ? styles.salutation : styles.centeredSalutation}>Fernando Ramos Suarez</Text>
           <View style={styles.signatureSpace} />
           <Text style={backgroundImage ? styles.signer : styles.centeredSigner}>{data.owner}</Text>
           <Text style={backgroundImage ? styles.signerRole : styles.centeredSignerRole}>Administrador</Text>
