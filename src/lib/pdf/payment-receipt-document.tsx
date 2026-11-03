@@ -1,4 +1,5 @@
 import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
+import { addressIncludesUnit } from "@/lib/pdf/receipt-address";
 
 const styles = StyleSheet.create({
   page: { backgroundColor: "#FFFFFF", color: "#1C1917", fontFamily: "Helvetica", fontSize: 12, lineHeight: 1.45, paddingHorizontal: 66, paddingTop: 72 },
@@ -27,13 +28,14 @@ export type PaymentReceiptPdfData = {
 };
 
 export function PaymentReceiptDocument({ data }: { data: PaymentReceiptPdfData }) {
+  const unitIsInAddress = addressIncludesUnit(data.property, data.unit);
   return <Document title={`Comprobante de pago ${data.folio}`} author={data.issuer}>
     <Page size="LETTER" style={styles.page}>
       <Text style={styles.heading}>COMPROBANTE DE PAGO</Text>
       <Text style={styles.folio}>Folio {data.folio}</Text>
       <Text style={styles.date}>{data.paymentDate}</Text>
       <Text style={styles.paragraph}>
-        Recibí de <Text style={styles.emphasis}>{data.tenant}</Text> la cantidad de <Text style={styles.emphasis}>{data.total}</Text> ({data.totalInWords}) por concepto de {data.concept} correspondientes al periodo <Text style={styles.emphasis}>{data.period}</Text>, del inmueble ubicado en <Text style={styles.emphasis}>{data.property}</Text>, unidad <Text style={styles.emphasis}>{data.unit}</Text>.
+        Recibí de <Text style={styles.emphasis}>{data.tenant}</Text> la cantidad de <Text style={styles.emphasis}>{data.total}</Text> ({data.totalInWords}) por concepto de {data.concept} correspondientes al periodo <Text style={styles.emphasis}>{data.period}</Text>, del inmueble ubicado en <Text style={styles.emphasis}>{data.property}{unitIsInAddress ? "" : `, unidad ${data.unit}`}</Text>.
       </Text>
       <View style={styles.signature}>
         <Text style={styles.signatureLine}>{data.issuer}</Text>

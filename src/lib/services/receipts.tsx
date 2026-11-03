@@ -31,6 +31,7 @@ export async function generarReciboPdf(receiptId: string) {
     total: formatCurrency(total),
     totalInWords: amountInWords(total),
     property: receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim(),
+    unit: receipt.contrato.unidad.identificador,
     rentalPeriod: formatReceiptCoverageRange(receipt.periodoInicio, receipt.periodoFin),
     issuedAt: formatLetterDate(calculateReceiptDueDate(receipt.periodo, receipt.contrato.diaPago)),
   };
@@ -80,6 +81,7 @@ export async function generarRecibosCobranzaPdf({
       total: formatCurrency(total),
       totalInWords: amountInWords(total),
       property: receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim(),
+      unit: receipt.contrato.unidad.identificador,
       rentalPeriod: formatReceiptCoverageRange(receipt.periodoInicio, receipt.periodoFin),
       issuedAt: formatLetterDate(calculateReceiptDueDate(receipt.periodo, receipt.contrato.diaPago)),
     };

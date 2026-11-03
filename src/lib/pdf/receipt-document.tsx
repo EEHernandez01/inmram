@@ -1,4 +1,5 @@
 import { Document, Image, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
+import { addressIncludesUnit } from "@/lib/pdf/receipt-address";
 
 const styles = StyleSheet.create({
   page: {
@@ -36,6 +37,7 @@ export type ReceiptPdfData = {
   total: string;
   totalInWords: string;
   property: string;
+  unit: string;
   rentalPeriod: string;
   issuedAt: string;
 };
@@ -45,13 +47,14 @@ export function ReceiptDocument({ data, backgroundImage }: { data: ReceiptPdfDat
 }
 
 export function ReceiptPage({ data, backgroundImage }: { data: ReceiptPdfData; backgroundImage?: Buffer }) {
+  const unitIsInAddress = addressIncludesUnit(data.property, data.unit);
   return <Page size="LETTER" style={[styles.page, backgroundImage ? {} : styles.pageWithoutBackground]}>
       {/* eslint-disable-next-line jsx-a11y/alt-text -- React PDF Image does not accept alt text. */}
       {backgroundImage ? <Image fixed src={backgroundImage} style={styles.background} /> : null}
       <View style={styles.content}>
         <Text style={backgroundImage ? styles.date : styles.centeredDate}>{data.issuedAt}</Text>
         <Text style={backgroundImage ? styles.paragraph : styles.centeredParagraph}>
-          Recibí del Sr. <Text style={styles.emphasis}>{data.tenant}</Text> la cantidad de <Text style={styles.emphasis}>{data.total}</Text> ({data.totalInWords}) por concepto de renta <Text style={styles.emphasis}>{data.rentalPeriod}</Text>, del inmueble ubicado en <Text style={styles.emphasis}>{data.property}</Text>.
+          Recibí del Sr. <Text style={styles.emphasis}>{data.tenant}</Text> la cantidad de <Text style={styles.emphasis}>{data.total}</Text> ({data.totalInWords}) por concepto de renta <Text style={styles.emphasis}>{data.rentalPeriod}</Text>, del inmueble ubicado en <Text style={styles.emphasis}>{data.property}{unitIsInAddress ? "" : `, departamento ${data.unit}`}</Text>.
         </Text>
         <View style={backgroundImage ? styles.signature : styles.centeredSignature}>
           <Text style={backgroundImage ? styles.salutation : styles.centeredSalutation}>Fernando Ramos Suarez</Text>
