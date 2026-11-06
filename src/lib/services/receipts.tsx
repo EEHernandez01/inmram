@@ -8,7 +8,7 @@ import { getOwnerScope, READ_ROLES, requireSystemRole } from "@/lib/auth/authori
 import { calculateReceiptDueDate, calculateReceiptTotal, receiptPeriodFromValue } from "@/lib/calculations/collection";
 import { prisma } from "@/lib/db/prisma";
 import { DomainError } from "@/lib/domain/errors";
-import { formatReceiptCoverageRange, formatCurrency } from "@/lib/format";
+import { formatReceiptCoverageRange, formatCurrency, keepDateTogether } from "@/lib/format";
 import { PaymentReceiptDocument } from "@/lib/pdf/payment-receipt-document";
 import { ReceiptDocument, ReceiptPage } from "@/lib/pdf/receipt-document";
 import { listarCobranzaMensual } from "@/lib/services/collection";
@@ -27,7 +27,7 @@ export async function generarReciboPdf(receiptId: string) {
   const data = {
     issuer,
     tenant: receipt.contrato.arrendatario,
-    total: formatCurrency(total),
+    total: formatReceiptCurrency(total),
     totalInWords: amountInWords(total),
     property: receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim(),
     rentalPeriod: formatReceiptCoverageRange(receipt.periodoInicio, receipt.periodoFin),
@@ -72,7 +72,7 @@ export async function generarRecibosCobranzaPdf({
     return {
       issuer,
       tenant: receipt.contrato.arrendatario,
-      total: formatCurrency(total),
+      total: formatReceiptCurrency(total),
       totalInWords: amountInWords(total),
       property: receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim(),
       rentalPeriod: formatReceiptCoverageRange(receipt.periodoInicio, receipt.periodoFin),
@@ -118,12 +118,16 @@ function amountInWords(value: number) {
 function formatLetterDate(value: Date) {
   const day = String(value.getUTCDate()).padStart(2, "0");
   const monthName = new Intl.DateTimeFormat("es-MX", { month: "long", timeZone: "UTC" }).format(value);
-  return `Ciudad de México ${day} de ${monthName} del ${value.getUTCFullYear()}`;
+  return keepDateTogether(`Ciudad de México ${day} de ${monthName} del ${value.getUTCFullYear()}`);
 }
 
 function formatReceiptPlaceAndDate(value: Date) {
   const date = new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" }).format(value);
-  return `Ciudad de México, ${date}`;
+  return keepDateTogether(`Ciudad de México, ${date}`);
+}
+
+function formatReceiptCurrency(value: number) {
+  return formatCurrency(value).replace("MXN$ ", "MXN$\u00a0");
 }
 
 export async function generarComprobantePagoPdf(receiptId: string) {
@@ -136,6 +140,6 @@ export async function generarComprobantePagoPdf(receiptId: string) {
   const total = calculateReceiptTotal({ rent: Number(receipt.monto) });
   const issuer = user.perfil?.razonSocial || user.perfil?.nombreCompleto || session.user.name || "Administración de rentas";
   const property = receipt.contrato.unidad.propiedad.direccion.replace(/\s+/g, " ").trim();
-  const data = { issuer, folio: receipt.id.slice(0, 8).toUpperCase(), tenant: receipt.contrato.arrendatario, concept: "renta", total: formatCurrency(total), totalInWords: amountInWords(total), property, period: formatReceiptCoverageRange(receipt.periodoInicio, receipt.periodoFin), paymentDate: formatReceiptPlaceAndDate(receipt.fechaPago) };
+  const data = { issuer, folio: receipt.id.slice(0, 8).toUpperCase(), tenant: receipt.contrato.arrendatario, concept: "renta", total: formatReceiptCurrency(total), totalInWords: amountInWords(total), property, period: formatReceiptCoverageRange(receipt.periodoInicio, receipt.periodoFin), paymentDate: formatReceiptPlaceAndDate(receipt.fechaPago) };
   return renderToBuffer(<PaymentReceiptDocument data={data} />);
 }

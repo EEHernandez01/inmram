@@ -39,7 +39,12 @@ export function formatDateRange(start: Date, end: Date) {
     year: "numeric",
     timeZone: "UTC",
   }).format(value);
-  return `del ${date(start)} al ${date(end)}`;
+  return `del ${keepDateTogether(date(start))} al ${keepDateTogether(date(end))}`;
+}
+
+/** Keep the day, month, and year of a formatted Spanish date on the same line. */
+export function keepDateTogether(value: string) {
+  return value.replace(/\b(\d{1,2}) de ([\p{L}]+) (de|del) (\d{4})\b/giu, "$1\u00a0de\u00a0$2\u00a0$3\u00a0$4");
 }
 
 export function formatReceiptCoverageRange(periodStart: Date, periodEnd: Date) {

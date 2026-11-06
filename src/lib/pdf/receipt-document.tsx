@@ -1,5 +1,7 @@
 import { Document, Image, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 
+const keepWordsTogether = (word: string) => [word];
+
 const styles = StyleSheet.create({
   page: {
     backgroundColor: "#FFFFFF",
@@ -39,9 +41,9 @@ export function ReceiptPage({ data, backgroundImage }: { data: ReceiptPdfData; b
       {/* eslint-disable-next-line jsx-a11y/alt-text -- React PDF Image does not accept alt text. */}
       {backgroundImage ? <Image fixed src={backgroundImage} style={styles.background} /> : null}
       <View style={styles.content}>
-        <Text style={styles.date}>{data.issuedAt}</Text>
-        <Text style={styles.paragraph}>
-          Recibí del Sr. <Text style={styles.emphasis}>{data.tenant}</Text> la cantidad de <Text style={styles.emphasis}>{data.total}</Text> ({data.totalInWords}) por concepto de renta <Text style={styles.emphasis}>{data.rentalPeriod}</Text>, del inmueble ubicado en <Text style={styles.emphasis}>{data.property}</Text>.
+        <Text hyphenationCallback={keepWordsTogether} style={styles.date}>{data.issuedAt}</Text>
+        <Text hyphenationCallback={keepWordsTogether} style={styles.paragraph}>
+          Recibí del Sr. <Text hyphenationCallback={keepWordsTogether} style={styles.emphasis}>{data.tenant}</Text> la cantidad de <Text hyphenationCallback={keepWordsTogether} style={styles.emphasis}>{data.total}</Text> ({data.totalInWords}) por concepto de renta <Text hyphenationCallback={keepWordsTogether} style={styles.emphasis}>{data.rentalPeriod}</Text>, del inmueble ubicado en <Text hyphenationCallback={keepWordsTogether} style={styles.emphasis}>{data.property}</Text>.
         </Text>
         <View style={styles.signature}>
           <Text style={styles.signer}>Fernando Ramos Suarez</Text>

@@ -1,5 +1,7 @@
 import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 
+const keepWordsTogether = (word: string) => [word];
+
 const styles = StyleSheet.create({
   page: { backgroundColor: "#FFFFFF", color: "#1C1917", fontFamily: "Helvetica", fontSize: 12, lineHeight: 1.45, paddingHorizontal: 66, paddingTop: 72 },
   heading: { color: "#1E3A5F", fontFamily: "Helvetica-Bold", fontSize: 17, textAlign: "center" },
@@ -30,9 +32,9 @@ export function PaymentReceiptDocument({ data }: { data: PaymentReceiptPdfData }
     <Page size="LETTER" style={styles.page}>
       <Text style={styles.heading}>COMPROBANTE DE PAGO</Text>
       <Text style={styles.folio}>Folio {data.folio}</Text>
-      <Text style={styles.date}>{data.paymentDate}</Text>
-      <Text style={styles.paragraph}>
-        Recibí de <Text style={styles.emphasis}>{data.tenant}</Text> la cantidad de <Text style={styles.emphasis}>{data.total}</Text> ({data.totalInWords}) por concepto de {data.concept} correspondientes al periodo <Text style={styles.emphasis}>{data.period}</Text>, del inmueble ubicado en <Text style={styles.emphasis}>{data.property}</Text>.
+      <Text hyphenationCallback={keepWordsTogether} style={styles.date}>{data.paymentDate}</Text>
+      <Text hyphenationCallback={keepWordsTogether} style={styles.paragraph}>
+        Recibí de <Text hyphenationCallback={keepWordsTogether} style={styles.emphasis}>{data.tenant}</Text> la cantidad de <Text hyphenationCallback={keepWordsTogether} style={styles.emphasis}>{data.total}</Text> ({data.totalInWords}) por concepto de {data.concept} correspondientes al periodo <Text hyphenationCallback={keepWordsTogether} style={styles.emphasis}>{data.period}</Text>, del inmueble ubicado en <Text hyphenationCallback={keepWordsTogether} style={styles.emphasis}>{data.property}</Text>.
       </Text>
       <View style={styles.signature}>
         <Text style={styles.signatureLine}>{data.issuer}</Text>
