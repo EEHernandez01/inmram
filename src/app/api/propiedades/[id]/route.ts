@@ -39,7 +39,7 @@ export async function POST(
       mantenimientoAnual: String(form.get("mantenimientoAnual") ?? ""),
       confirmarDuplicado: String(form.get("confirmarDuplicado") ?? ""),
     });
-    await guardarFotosBlobDePropiedad(id, photos);
+    await guardarFotosBlobDePropiedad(id, photos, form.getAll("fotosEliminar").map(String));
 
     const target = new URL(`/propiedades/${id}`, requestUrl);
     if (form.get("fotoCargaFallida") === "1") {

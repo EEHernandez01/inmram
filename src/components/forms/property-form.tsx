@@ -12,10 +12,9 @@ import { Field, Select } from "@/components/ui/form-controls";
 import { FormStatus } from "@/components/ui/form-status";
 import type { UbicacionParaUnificar } from "@/lib/validation/property-merge";
 import { MoneyInput } from "@/components/ui/money-input";
+import { isSupportedPropertyPhoto, MAX_PROPERTY_PHOTOS, MAX_PROPERTY_PHOTO_SIZE_BYTES } from "@/lib/property-photo-limits";
 
 const defaultMoneyValue = "0.00";
-const maxPhotoSize = 4 * 1024 * 1024;
-const allowedPhotoTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 type PropertyDefaults = {
   propietarioId?: string;
@@ -135,12 +134,13 @@ export function PropertyForm({ action = "/api/propiedades", defaults, existingPh
 
     event.preventDefault();
     setUploadError(undefined);
-    const remainingSlots = 8 - (existingPhotos?.length ?? 0);
+    const removedCount = form.querySelectorAll('input[name="fotosEliminar"]').length;
+    const remainingSlots = MAX_PROPERTY_PHOTOS - (existingPhotos?.length ?? 0) + removedCount;
     if (files.length > remainingSlots) {
       setUploadError(`Puedes agregar hasta ${remainingSlots} fotos más.`);
       return;
     }
-    if (files.some((file) => !allowedPhotoTypes.has(file.type) || file.size > maxPhotoSize)) {
+    if (files.some((file) => !isSupportedPropertyPhoto(file) || file.size > MAX_PROPERTY_PHOTO_SIZE_BYTES)) {
       setUploadError("Cada foto debe ser JPG, PNG o WebP y pesar máximo 4 MB.");
       return;
     }
@@ -148,7 +148,10 @@ export function PropertyForm({ action = "/api/propiedades", defaults, existingPh
     setIsUploading(true);
     try {
       form.querySelectorAll('input[name="fotosBlob"], input[name="fotoCargaFallida"]').forEach((input) => input.remove());
-      const results = await Promise.allSettled(files.map(uploadPropertyPhoto));
+      const results: PromiseSettledResult<UploadedPhoto>[] = [];
+      for (let index = 0; index < files.length; index += 3) {
+        results.push(...await Promise.allSettled(files.slice(index, index + 3).map(uploadPropertyPhoto)));
+      }
 
       for (const result of results) {
         if (result.status !== "fulfilled") continue;
@@ -179,7 +182,7 @@ export function PropertyForm({ action = "/api/propiedades", defaults, existingPh
     <form action={action} aria-busy={isUploading} className="space-y-6" onSubmit={handleSubmit} {...transportProps}>
       <section className="rounded-xl border border-border p-4 sm:p-5"><div className="mb-5"><h2 className="font-serif text-lg font-semibold text-ink">Información de la propiedad</h2></div>{owners ? <div className="mb-5"><Field label="Propietario"><Select defaultValue={defaults?.propietarioId} name="propietarioId" required><option value="">Selecciona un propietario</option>{owners.map((owner) => <option key={owner.value} value={owner.value}>{owner.nombre}</option>)}</Select></Field></div> : null}<LocationPicker defaults={{ address: defaults?.direccion, googlePlaceId: defaults?.googlePlaceId, latitude: defaults?.latitud, longitude: defaults?.longitud }} enabled={placesEnabled} onLocationChange={handleLocationChange} />{coincidencias.length > 0 ? <Alert className="mt-5" variant="warning"><p className="font-semibold">Ya hay {coincidencias.length === 1 ? "una propiedad" : "propiedades"} con esta dirección o ubicación.</p><ul className="mt-2 space-y-1">{coincidencias.map((property) => <li key={property.id}><Link className="font-semibold underline" href={`/propiedades/${property.id}`}>{property.direccion}</Link> · {property.unidades} {property.unidades === 1 ? "unidad" : "unidades"}{property.archivadaEn ? " · Archivada" : <Link className="ml-3 font-semibold underline" href={`/propiedades/${property.id}/unidades/nueva`}>Agregar unidad</Link>}{propertyId && !property.archivadaEn ? <div className="mt-2"><MergePropertyButton action={`/api/propiedades/${propertyId}/unificar`} duplicatePropertyId={property.id} duplicateAddress={property.direccion} ubicacion={location} fromEditor /></div> : null}</li>)}</ul><p className="mt-3">Si son fichas del mismo inmueble, selecciona <strong>Unificar fichas</strong>. Para registrar un espacio nuevo, selecciona <strong>Agregar unidad</strong>.</p><label className="mt-3 flex items-start gap-2"><input checked={duplicateConfirmed} className="mt-1" name="confirmarDuplicado" onChange={(event) => setDuplicateConfirmed(event.target.checked)} type="checkbox" value="1" /><span>Confirmo que es un inmueble distinto y deseo crear otra ficha.</span></label></Alert> : <input name="confirmarDuplicado" type="hidden" value="" />}</section>
       <section className="rounded-xl border border-border p-4 sm:p-5"><div className="mb-5"><h2 className="font-serif text-lg font-semibold text-ink">Valores y gastos anuales</h2><p className="mt-1 text-sm text-ink-secondary">Captura importes en pesos mexicanos.</p></div><div className="grid gap-5 sm:grid-cols-2"><Field hint="Valor registrado para fines fiscales." label="Valor catastral"><MoneyInput defaultValue={defaults?.valorCatastral ?? defaultMoneyValue} name="valorCatastral" required /></Field><Field hint="Valor estimado total del inmueble." label="Valor comercial total"><MoneyInput defaultValue={defaults?.valorComercialTotal ?? defaultMoneyValue} name="valorComercialTotal" required /></Field><Field hint="Pago total estimado por año." label="Predial anual"><MoneyInput defaultValue={defaults?.predialAnual ?? defaultMoneyValue} name="predialAnual" required /></Field><Field hint="Cuotas y servicios comunes por año." label="Mantenimiento anual"><MoneyInput defaultValue={defaults?.mantenimientoAnual ?? defaultMoneyValue} name="mantenimientoAnual" required /></Field></div></section>
-      <section className="rounded-xl border border-border p-4 sm:p-5"><div className="mb-5"><h2 className="font-serif text-lg font-semibold text-ink">Fotos</h2><p className="mt-1 text-sm text-ink-secondary">Una galería ayuda a identificar rápidamente el inmueble.</p></div><PropertyPhotoInput existingPhotos={existingPhotos} inputRef={photoInputRef} /></section>
+      <section className="rounded-xl border border-border p-4 sm:p-5"><div className="mb-5"><h2 className="font-serif text-lg font-semibold text-ink">Fotos</h2><p className="mt-1 text-sm text-ink-secondary">Una galería ayuda a identificar rápidamente el inmueble.</p></div><PropertyPhotoInput existingPhotos={existingPhotos} inputRef={photoInputRef} removable={Boolean(propertyId)} /></section>
       <FormStatus message={duplicateError ?? uploadError} />
       <div className="sticky bottom-3 flex items-center justify-end rounded-xl border border-border bg-surface/95 p-3 shadow-lg backdrop-blur sm:static sm:justify-start sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none"><Button disabled={isUploading || isCheckingDuplicates} type="submit">{isUploading ? "Subiendo fotos…" : isCheckingDuplicates ? "Revisando propiedad…" : submitLabel}</Button></div>
     </form>

@@ -11,10 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form-controls";
 import { MoneyInput } from "@/components/ui/money-input";
 import { unitAmenities } from "@/lib/unit-amenities";
+import { isSupportedPropertyPhoto, MAX_PROPERTY_PHOTOS, MAX_PROPERTY_PHOTO_SIZE_BYTES } from "@/lib/property-photo-limits";
 
 const defaultMoneyValue = "0.00";
-const maxPhotoSize = 4 * 1024 * 1024;
-const allowedPhotoTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 const steps = [
   ["Ubicación", "Domicilio y responsable"],
@@ -456,12 +455,12 @@ export function PropertyOnboardingWizard({ owners, placesEnabled }: { owners: Ow
     }
 
     const files = existingProperty ? [] : Array.from(photoInputRef.current?.files ?? []);
-    if (files.length > 8) {
-      setMessage("Puedes agregar hasta 8 fotos.");
+    if (files.length > MAX_PROPERTY_PHOTOS) {
+      setMessage(`Puedes agregar hasta ${MAX_PROPERTY_PHOTOS} fotos.`);
       setStep(1);
       return;
     }
-    if (files.some((file) => !allowedPhotoTypes.has(file.type) || file.size > maxPhotoSize)) {
+    if (files.some((file) => !isSupportedPropertyPhoto(file) || file.size > MAX_PROPERTY_PHOTO_SIZE_BYTES)) {
       setMessage("Cada foto debe ser JPG, PNG o WebP y pesar máximo 4 MB.");
       setStep(1);
       return;
@@ -563,7 +562,7 @@ export function PropertyOnboardingWizard({ owners, placesEnabled }: { owners: Ow
     <section className="space-y-6 rounded-card border border-border bg-surface p-4 shadow-sm sm:p-6">
       <div><h2 className="font-serif text-xl font-semibold text-ink">Costos y fotos</h2><p className="mt-1 text-sm leading-6 text-ink-secondary">Los valores y gastos corresponden a todo el inmueble. Captura los importes en pesos mexicanos.</p></div>
       <div className="grid gap-5 sm:grid-cols-2"><Field hint="Valor registrado para fines fiscales." label="Valor catastral"><MoneyInput defaultValue={property.valorCatastral} name="valorCatastral" onChange={(event) => updateProperty("valorCatastral", event.currentTarget.value)} required /></Field><Field hint="Valor estimado total del inmueble." label="Valor comercial total"><MoneyInput defaultValue={property.valorComercialTotal} name="valorComercialTotal" onChange={(event) => updateProperty("valorComercialTotal", event.currentTarget.value)} required /></Field><Field hint="Pago total estimado por año." label="Predial anual"><MoneyInput defaultValue={property.predialAnual} name="predialAnual" onChange={(event) => updateProperty("predialAnual", event.currentTarget.value)} required /></Field><Field hint="Cuotas y servicios comunes por año." label="Mantenimiento anual"><MoneyInput defaultValue={property.mantenimientoAnual} name="mantenimientoAnual" onChange={(event) => updateProperty("mantenimientoAnual", event.currentTarget.value)} required /></Field></div>
-      <div className="border-t border-border pt-6"><h3 className="font-serif text-lg font-semibold text-ink">Fotos</h3><p className="mt-1 text-sm text-ink-secondary">Opcional · Puedes agregar hasta 8 imágenes. Las fotos se cargan al crear la propiedad y no se incluyen en los borradores.</p><div className="mt-4"><PropertyPhotoInput inputRef={photoInputRef} onFilesChange={(files) => setPhotoCount(files.length)} /></div></div>
+      <div className="border-t border-border pt-6"><h3 className="font-serif text-lg font-semibold text-ink">Fotos</h3><p className="mt-1 text-sm text-ink-secondary">Opcional · Puedes agregar hasta {MAX_PROPERTY_PHOTOS} imágenes. Las fotos se cargan al crear la propiedad y no se incluyen en los borradores.</p><div className="mt-4"><PropertyPhotoInput inputRef={photoInputRef} onFilesChange={(files) => setPhotoCount(files.length)} /></div></div>
     </section>
     </fieldset>
 

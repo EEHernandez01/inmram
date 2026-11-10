@@ -4,10 +4,9 @@ import sharp from "sharp";
 
 import { requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
 import { isSameOrigin } from "@/lib/http/route-security";
+import { isSupportedPropertyPhoto, MAX_PROPERTY_PHOTO_SIZE_BYTES } from "@/lib/property-photo-limits";
 
-const maxPhotoSize = 4 * 1024 * 1024;
 const maxPhotoWidth = 2_000;
-const allowedContentTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function filenameFor(file: File) {
   const baseName = file.name
@@ -33,7 +32,7 @@ export async function POST(request: Request) {
     if (!(photo instanceof File) || photo.size === 0) {
       return NextResponse.json({ error: "Selecciona una foto válida." }, { status: 400 });
     }
-    if (!allowedContentTypes.has(photo.type) || photo.size > maxPhotoSize) {
+    if (!isSupportedPropertyPhoto(photo) || photo.size > MAX_PROPERTY_PHOTO_SIZE_BYTES) {
       return NextResponse.json({ error: "Cada foto debe ser JPG, PNG o WebP y pesar máximo 4 MB." }, { status: 400 });
     }
 
