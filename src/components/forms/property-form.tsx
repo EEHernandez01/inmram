@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { upload } from "@vercel/blob/client";
 
 import { MergePropertyButton } from "@/components/forms/merge-property-button";
 import { LocationPicker } from "@/components/forms/location-picker";
@@ -10,6 +11,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, Select } from "@/components/ui/form-controls";
 import { FormStatus } from "@/components/ui/form-status";
+import { optimizePropertyPhoto } from "@/lib/optimize-property-photo";
 import type { UbicacionParaUnificar } from "@/lib/validation/property-merge";
 import { MoneyInput } from "@/components/ui/money-input";
 import { isSupportedPropertyPhoto, MAX_PROPERTY_PHOTOS, MAX_PROPERTY_PHOTO_SIZE_BYTES } from "@/lib/property-photo-limits";
@@ -39,13 +41,22 @@ type CoincidenciaPropiedad = {
 };
 
 async function uploadPropertyPhoto(file: File): Promise<UploadedPhoto> {
-  const body = new FormData();
-  body.append("foto", file);
-  const response = await fetch("/api/uploads/propiedades", { method: "POST", body });
-  const payload = await response.json().catch(() => ({})) as UploadedPhoto & { error?: string };
+  const optimized = await optimizePropertyPhoto(file);
+  const baseName = optimized.name.replace(/\.[^.]+$/, "").normalize("NFKD").replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "foto";
+  const blob = await upload(`propiedades/${crypto.randomUUID()}-${baseName}.webp`, optimized, {
+    access: "public",
+    handleUploadUrl: "/api/uploads/propiedades",
+    contentType: "image/webp",
+    multipart: optimized.size > 5 * 1024 * 1024,
+  });
 
-  if (!response.ok) throw new Error(payload.error ?? "No fue posible cargar la foto.");
-  return payload;
+  return {
+    url: blob.url,
+    pathname: blob.pathname,
+    nombre: `${file.name.replace(/\.[^.]+$/, "") || "foto"}.webp`,
+    mimeType: "image/webp",
+    tamanoBytes: optimized.size,
+  };
 }
 
 export function PropertyForm({ action = "/api/propiedades", defaults, existingPhotos, placesEnabled, propertyId, submitLabel, owners }: {
@@ -141,7 +152,7 @@ export function PropertyForm({ action = "/api/propiedades", defaults, existingPh
       return;
     }
     if (files.some((file) => !isSupportedPropertyPhoto(file) || file.size > MAX_PROPERTY_PHOTO_SIZE_BYTES)) {
-      setUploadError("Cada foto debe ser JPG, PNG o WebP y pesar máximo 4 MB.");
+      setUploadError("Cada foto debe ser JPG, PNG o WebP y pesar máximo 10 MB.");
       return;
     }
 

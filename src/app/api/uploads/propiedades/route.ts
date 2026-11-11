@@ -1,60 +1,33 @@
-import { put } from "@vercel/blob";
+import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { NextResponse } from "next/server";
-import sharp from "sharp";
 
 import { requireSystemRole, WRITE_ROLES } from "@/lib/auth/authorization";
-import { isSameOrigin } from "@/lib/http/route-security";
-import { isSupportedPropertyPhoto, MAX_PROPERTY_PHOTO_SIZE_BYTES } from "@/lib/property-photo-limits";
+import { MAX_PROPERTY_PHOTO_SIZE_BYTES } from "@/lib/property-photo-limits";
 
-const maxPhotoWidth = 2_000;
-
-function filenameFor(file: File) {
-  const baseName = file.name
-    .replace(/\.[^.]+$/, "")
-    .normalize("NFKD")
-    .replace(/[^a-zA-Z0-9_-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80) || "foto";
-
-  return `propiedades/${crypto.randomUUID()}-${baseName}.webp`;
-}
+const propertyPhotoPath = /^propiedades\/[a-zA-Z0-9_-]+\.(jpe?g|png|webp)$/i;
 
 export async function POST(request: Request) {
-  if (!isSameOrigin(request)) {
-    return new NextResponse("Origen no permitido.", { status: 403 });
-  }
-
   try {
-    await requireSystemRole(WRITE_ROLES);
-    const form = await request.formData();
-    const photo = form.get("foto");
+    const body = (await request.json()) as HandleUploadBody;
+    const result = await handleUpload({
+      body,
+      request,
+      onBeforeGenerateToken: async (pathname) => {
+        await requireSystemRole(WRITE_ROLES);
+        if (!propertyPhotoPath.test(pathname)) {
+          throw new Error("Ruta de foto no válida.");
+        }
 
-    if (!(photo instanceof File) || photo.size === 0) {
-      return NextResponse.json({ error: "Selecciona una foto válida." }, { status: 400 });
-    }
-    if (!isSupportedPropertyPhoto(photo) || photo.size > MAX_PROPERTY_PHOTO_SIZE_BYTES) {
-      return NextResponse.json({ error: "Cada foto debe ser JPG, PNG o WebP y pesar máximo 4 MB." }, { status: 400 });
-    }
-
-    const optimizedPhoto = await sharp(Buffer.from(await photo.arrayBuffer()))
-      .rotate()
-      .resize({ width: maxPhotoWidth, withoutEnlargement: true })
-      .webp({ quality: 80, effort: 4 })
-      .toBuffer();
-    const blob = await put(filenameFor(photo), optimizedPhoto, {
-      access: "public",
-      addRandomSuffix: true,
-      contentType: "image/webp",
+        return {
+          allowedContentTypes: ["image/jpeg", "image/png", "image/webp"],
+          maximumSizeInBytes: MAX_PROPERTY_PHOTO_SIZE_BYTES,
+          addRandomSuffix: true,
+        };
+      },
     });
 
-    return NextResponse.json({
-      url: blob.url,
-      pathname: blob.pathname,
-      nombre: `${photo.name.replace(/\.[^.]+$/, "") || "foto"}.webp`,
-      mimeType: "image/webp",
-      tamanoBytes: optimizedPhoto.length,
-    });
+    return NextResponse.json(result);
   } catch {
-    return NextResponse.json({ error: "No fue posible cargar la foto." }, { status: 500 });
+    return NextResponse.json({ error: "No fue posible preparar la carga de la foto." }, { status: 400 });
   }
 }
