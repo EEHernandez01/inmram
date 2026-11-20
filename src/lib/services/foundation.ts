@@ -1056,8 +1056,17 @@ export async function actualizarContrato(
     const reviewed = await tx.recibo.updateMany({ where: receiptsToReview, data: { estatus: EstadoRecibo.REVISION } });
     for (const receipt of receiptsBeforeReview) await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "ENVIAR_A_REVISION", entidad: "Recibo", entidadId: receipt.id, antes: { estatus: receipt.estatus }, despues: { estatus: EstadoRecibo.REVISION, contratoId: id } });
     const coverage = calculateReceiptCoverage(period, collectionIntervalMonths(updated.periodicidadCobro), updated.fechaFin, updated.fechaInicio, updated.modoPeriodoCobro);
+    const paidReceiptsToShorten = updated.periodicidadCobro === "MENSUAL" ? await tx.recibo.findMany({ where: { contratoId: id, estatus: EstadoRecibo.PAGADO, periodoInicio: { lt: coverage.periodStart }, periodoFin: { gte: coverage.periodStart } }, select: { id: true, periodo: true, periodoInicio: true, periodoFin: true } }) : [];
+    let paidCoverageShortenedForCurrentPeriod = false;
+    for (const paidReceipt of paidReceiptsToShorten) {
+      const monthlyCoverage = calculateReceiptCoverage(paidReceipt.periodo, 1, updated.fechaFin, updated.fechaInicio, updated.modoPeriodoCobro);
+      if (monthlyCoverage.periodEnd >= coverage.periodStart || paidReceipt.periodoFin < coverage.periodEnd) continue;
+      const updatedPaidReceipt = await tx.recibo.update({ where: { id: paidReceipt.id }, data: { periodoInicio: monthlyCoverage.periodStart, periodoFin: monthlyCoverage.periodEnd } });
+      paidCoverageShortenedForCurrentPeriod ||= paidReceipt.periodoInicio <= coverage.periodStart && paidReceipt.periodoFin >= coverage.periodEnd;
+      await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "AJUSTAR_COBERTURA_RECIBO_PAGADO", entidad: "Recibo", entidadId: paidReceipt.id, antes: { periodoInicio: paidReceipt.periodoInicio.toISOString(), periodoFin: paidReceipt.periodoFin.toISOString() }, despues: { periodoInicio: updatedPaidReceipt.periodoInicio.toISOString(), periodoFin: updatedPaidReceipt.periodoFin.toISOString() } });
+    }
     const receiptCandidate = isIncludedInMonthlyCollection(updated.periodicidadCobro) ? await tx.recibo.findFirst({ where: { contratoId: id, periodo: period, estatus: { not: EstadoRecibo.PAGADO } }, include: { pagos: { where: { anuladoEn: null }, orderBy: { fechaPago: "desc" } } } }) : null;
-    const canReopenOmittedReceipt = Boolean(receiptCandidate?.estatus === EstadoRecibo.OMITIDO && updated.periodicidadCobro === "MENSUAL" && (before.periodicidadCobro === "ANUAL" || receiptCandidate.periodoInicio.getTime() !== coverage.periodStart.getTime() || receiptCandidate.periodoFin.getTime() !== coverage.periodEnd.getTime()));
+    const canReopenOmittedReceipt = Boolean(receiptCandidate?.estatus === EstadoRecibo.OMITIDO && updated.periodicidadCobro === "MENSUAL" && (before.periodicidadCobro === "ANUAL" || paidCoverageShortenedForCurrentPeriod || receiptCandidate.periodoInicio.getTime() !== coverage.periodStart.getTime() || receiptCandidate.periodoFin.getTime() !== coverage.periodEnd.getTime()));
     const receipt = receiptCandidate && (receiptCandidate.estatus !== EstadoRecibo.OMITIDO || canReopenOmittedReceipt) ? receiptCandidate : null;
     if (receipt && coverage.months > 0 && coverage.periodEnd >= period) {
       const dueDate = calculateContractReceiptDueDate(period, updated.diaPago, nextCollectionDate);
