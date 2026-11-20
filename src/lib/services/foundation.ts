@@ -1055,9 +1055,10 @@ export async function actualizarContrato(
     const receiptsBeforeReview = await tx.recibo.findMany({ where: receiptsToReview, select: { id: true, estatus: true } });
     const reviewed = await tx.recibo.updateMany({ where: receiptsToReview, data: { estatus: EstadoRecibo.REVISION } });
     for (const receipt of receiptsBeforeReview) await registrarAuditoria(tx, { usuarioSistemaId: user.id, accion: "ENVIAR_A_REVISION", entidad: "Recibo", entidadId: receipt.id, antes: { estatus: receipt.estatus }, despues: { estatus: EstadoRecibo.REVISION, contratoId: id } });
-    const canReopenOmittedReceipt = before.periodicidadCobro === "ANUAL" && updated.periodicidadCobro === "MENSUAL";
-    const receipt = isIncludedInMonthlyCollection(updated.periodicidadCobro) ? await tx.recibo.findFirst({ where: { contratoId: id, periodo: period, estatus: canReopenOmittedReceipt ? { not: EstadoRecibo.PAGADO } : { notIn: [EstadoRecibo.PAGADO, EstadoRecibo.OMITIDO] } }, include: { pagos: { where: { anuladoEn: null }, orderBy: { fechaPago: "desc" } } } }) : null;
     const coverage = calculateReceiptCoverage(period, collectionIntervalMonths(updated.periodicidadCobro), updated.fechaFin, updated.fechaInicio, updated.modoPeriodoCobro);
+    const receiptCandidate = isIncludedInMonthlyCollection(updated.periodicidadCobro) ? await tx.recibo.findFirst({ where: { contratoId: id, periodo: period, estatus: { not: EstadoRecibo.PAGADO } }, include: { pagos: { where: { anuladoEn: null }, orderBy: { fechaPago: "desc" } } } }) : null;
+    const canReopenOmittedReceipt = Boolean(receiptCandidate?.estatus === EstadoRecibo.OMITIDO && updated.periodicidadCobro === "MENSUAL" && (before.periodicidadCobro === "ANUAL" || receiptCandidate.periodoInicio.getTime() !== coverage.periodStart.getTime() || receiptCandidate.periodoFin.getTime() !== coverage.periodEnd.getTime()));
+    const receipt = receiptCandidate && (receiptCandidate.estatus !== EstadoRecibo.OMITIDO || canReopenOmittedReceipt) ? receiptCandidate : null;
     if (receipt && coverage.months > 0 && coverage.periodEnd >= period) {
       const dueDate = calculateContractReceiptDueDate(period, updated.diaPago, nextCollectionDate);
       const amount = calculatePeriodicCharge(updated.rentaMensualBase.toString(), coverage.months);
