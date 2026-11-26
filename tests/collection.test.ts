@@ -13,6 +13,7 @@ import {
   calculateReceiptStatus,
   calculateReceiptTotal,
   contractOverlapsPeriod,
+  collectionPeriodIsAnticipatable,
   currentReceiptPeriod,
   receiptPeriodIsCoveredBy,
   receiptPeriodsOverlap,
@@ -39,6 +40,12 @@ test("el primer recibo histórico respeta la fecha elegida y luego vuelve al dí
   assert.equal(calculateContractReceiptDueDate(november, 5, firstDate).toISOString(), firstDate.toISOString());
   assert.equal(calculateReceiptStatus({ currentDate: new Date("2026-10-13T00:00:00.000Z"), dueDate: firstDate, paid: false }), "PENDIENTE");
   assert.equal(calculateContractReceiptDueDate(december, 5, firstDate).toISOString(), "2026-12-05T00:00:00.000Z");
+});
+
+test("la solicitud anticipada solo acepta meses posteriores al mes actual en Ciudad de México", () => {
+  const now = new Date("2026-11-27T05:30:00.000Z");
+  assert.equal(collectionPeriodIsAnticipatable(receiptPeriodFromValue("2026-11"), now), false);
+  assert.equal(collectionPeriodIsAnticipatable(receiptPeriodFromValue("2026-12"), now), true);
 });
 
 test("los contratos existentes sin fecha inicial de cobro conservan el día pactado", () => {

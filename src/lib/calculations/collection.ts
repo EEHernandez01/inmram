@@ -49,6 +49,10 @@ export function currentReceiptPeriod(now = new Date()) {
   return new Date(Date.UTC(year, month - 1, 1));
 }
 
+export function collectionPeriodIsAnticipatable(period: Date, now = new Date()) {
+  return period > currentReceiptPeriod(now);
+}
+
 export function receiptPeriodFromValue(value: string) {
   const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(value);
   if (!match) throw new Error("Periodo mensual inválido.");

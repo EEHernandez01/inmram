@@ -10,6 +10,7 @@ import {
   calculatePeriodicCharge,
   calculateContractReceiptDueDate,
   calculateContractFirstCollectionDate,
+  collectionPeriodIsAnticipatable,
   collectionIntervalMonths,
   collectionPeriodIsEligible,
   calculateReceiptStatus,
@@ -19,6 +20,7 @@ import {
   MONTHLY_COLLECTION_FREQUENCIES,
   receiptPeriodIsCoveredBy,
   receiptPeriodsOverlap,
+  receiptPeriodFromValue,
   receiptPeriodValue,
   resolveReceiptOverlapStatus,
   receiptPeriodEnd,
@@ -31,6 +33,7 @@ import {
   paymentInputSchema,
   paymentReversalInputSchema,
   receiptReviewResolutionSchema,
+  receiptPeriodSchema,
   type PaymentInput,
   type PaymentReversalInput,
 } from "@/lib/validation/collection";
@@ -68,6 +71,74 @@ function receiptPaymentSummary(receipt: ReceiptWithPayments) {
 export async function sincronizarCobranzaActual(now = new Date()) {
   await requireSystemRole(WRITE_ROLES);
   return sincronizarCobranzaSistema(now);
+}
+
+export async function generarCobranzaAnticipada(contractId: string, periodValue: string, now = new Date()) {
+  const { user } = await requireSystemRole(WRITE_ROLES);
+  const id = recordIdSchema.parse(contractId);
+  const value = receiptPeriodSchema.parse(periodValue);
+  const period = receiptPeriodFromValue(value);
+  if (!collectionPeriodIsAnticipatable(period, now)) {
+    throw new DomainError("COLLECTION_PERIOD_NOT_FUTURE", "La solicitud anticipada solo puede generarse para un mes futuro.");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const contract = await tx.contrato.findUnique({
+      where: { id },
+      include: { unidad: { include: { propiedad: { select: { archivadaEn: true } } } } },
+    });
+    if (!contract) throw new DomainError("NOT_FOUND", "El contrato no existe.");
+    if (contract.estado !== EstadoContrato.ACTIVO) throw new DomainError("CONTRACT_NOT_ACTIVE", "Solo se pueden generar solicitudes para contratos activos.");
+    if (contract.unidad.propiedad.archivadaEn) throw new DomainError("PROPERTY_ARCHIVED", "La propiedad está archivada y es de solo consulta.");
+    if (contract.formaPago !== "EFECTIVO") throw new DomainError("PAYMENT_REQUEST_UNAVAILABLE", "Los contratos con pago por transferencia no tienen solicitud de pago en PDF.");
+    if (!MONTHLY_COLLECTION_FREQUENCIES.includes(contract.periodicidadCobro as (typeof MONTHLY_COLLECTION_FREQUENCIES)[number])) {
+      throw new DomainError("COLLECTION_FREQUENCY_UNAVAILABLE", "La solicitud anticipada solo está disponible para cobros mensuales o bimestrales.");
+    }
+    if (contract.fechaInicio > receiptPeriodEnd(period) || contract.fechaFin < period) {
+      throw new DomainError("CONTRACT_OUTSIDE_PERIOD", "El periodo seleccionado está fuera de la vigencia del contrato.");
+    }
+
+    const firstCollectionDate = contract.fechaProximoCobro ?? calculateContractFirstCollectionDate(contract.fechaInicio, contract.diaPago);
+    const intervalMonths = collectionIntervalMonths(contract.periodicidadCobro);
+    if (!collectionPeriodIsEligible(period, firstCollectionDate, intervalMonths)) {
+      throw new DomainError("COLLECTION_PERIOD_NOT_ELIGIBLE", "El periodo seleccionado no corresponde a la periodicidad del contrato.");
+    }
+
+    const dueDate = calculateContractReceiptDueDate(period, contract.diaPago, firstCollectionDate);
+    if (receiptPeriodValue(dueDate) !== value) {
+      throw new DomainError("COLLECTION_DUE_DATE_OUTSIDE_PERIOD", "La fecha de pago del contrato cae fuera del periodo seleccionado.");
+    }
+    const coverage = calculateReceiptCoverage(period, intervalMonths, contract.fechaFin, contract.fechaInicio, contract.modoPeriodoCobro);
+    if (coverage.months === 0 || coverage.periodEnd < period) {
+      throw new DomainError("CONTRACT_OUTSIDE_PERIOD", "El periodo seleccionado está fuera de la vigencia del contrato.");
+    }
+
+    const overlap = await tx.recibo.findFirst({
+      where: { contratoId: id, periodoInicio: { lte: coverage.periodEnd }, periodoFin: { gte: coverage.periodStart } },
+      select: { id: true },
+    });
+    if (overlap) throw new DomainError("RECEIPT_PERIOD_OVERLAP", "Ya existe un recibo que cubre total o parcialmente ese periodo.");
+
+    const receipt = await tx.recibo.create({
+      data: {
+        contratoId: id,
+        periodo: period,
+        periodoInicio: coverage.periodStart,
+        periodoFin: coverage.periodEnd,
+        fechaVencimiento: dueDate,
+        monto: calculatePeriodicCharge(contract.rentaMensualBase.toString(), coverage.months),
+        estatus: calculateReceiptStatus({ currentDate: currentCollectionDate(now), dueDate, paid: false }),
+      },
+    });
+    await registrarAuditoria(tx, {
+      usuarioSistemaId: user.id,
+      accion: "GENERAR_SOLICITUD_COBRO_ANTICIPADA",
+      entidad: "Recibo",
+      entidadId: receipt.id,
+      despues: { contratoId: id, periodo: value, periodoInicio: coverage.periodStart.toISOString(), periodoFin: coverage.periodEnd.toISOString(), fechaVencimiento: dueDate.toISOString(), monto: receipt.monto.toString(), estatus: receipt.estatus },
+    });
+    return receipt;
+  });
 }
 
 const overlapReviewReason = "El periodo se traslapa con otro recibo del contrato.";
